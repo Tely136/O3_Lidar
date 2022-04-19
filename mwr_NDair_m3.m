@@ -1,4 +1,6 @@
-function mwr=loadMWRdata(mwrfilename)
+function [NDAir_m3_mat,D_molex_mat]=mwr_NDair_m3(mwrfilename,hkm,TimeInHour_avg,tdiff)
+len_t=length(TimeInHour_avg);
+len_h=length(hkm);
 %% read the microwave radiometer whole file
 opts = delimitedTextImportOptions;
 opts.Delimiter=',';
@@ -17,7 +19,7 @@ ind_p=(Tcode==201);% row index for surface pressure
 time_array_utc=datetime(table2array(rm(ind_temp,2)),'inputFormat','MM/dd/yy HH:mm:ss');% time array for radiometer
 [h,m,s] = hms(time_array_utc);
 TimeInHour_utc=h+m./60+s./3600;
-N=length(TimeInHour_utc);
+len_t_mwr=length(TimeInHour_utc);
 % get the date(utc) of the first data 
 mwrdate=datestr(time_array_utc(1),'yyyymmdd');
 
@@ -35,9 +37,9 @@ Na=6.02214*10^23;% [/mol]
 T0=temp_array(1);% surface temperature (K)
 h0=height(1);
 
-Pres=nan(length(height),N);
-ND_air=nan(length(height),N);% m^-3
-for i=1:N
+Pres=nan(length(height),len_t_mwr);
+ND_air=nan(length(height),len_t_mwr);% m^-3
+for i=1:len_t_mwr
     p = polyfit(height',temp_array(:,i),1);
     L=-p(1)*1e-3;% K/m
     T0=p(2);
@@ -45,13 +47,5 @@ for i=1:N
     ND_air(:,i)= Na/R.*Pres(:,i)./temp_array(:,i);
 end 
  
-mwr.time_array_utc=time_array_utc;
-mwr.TimeInHour_utc=TimeInHour_utc;
-mwr.mwrdate=mwrdate;
-mwr.temp_array=temp_array;
-mwr.p_array=p_array;
-mwr.pres=Pres;
-mwr.height=height;
-mwr.NDAir_m3=ND_air;
-
-end
+o3dial_hr_avg_utc = TimeInHour_avg+tdiff;
+% interpolate the air density to mat(hkm,TimeInHour_avg)

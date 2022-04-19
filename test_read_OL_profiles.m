@@ -61,26 +61,28 @@ prof_an_287_nr(start_bin_nr:end,:) = sgolayfilt(sgolayfilt(prof_an_287_nr(start_
 prof_an_299_nr(start_bin_nr:end,:) = sgolayfilt(sgolayfilt(prof_an_299_nr(start_bin_nr:end,:),1,31),1,31);
 
 %% ploting the cloud screened smoothed profiles
-id=3;
-figure
-plot(prof_an_287(:,id),hkm,'r');hold on
-plot(prof_an_299(:,id),hkm,'b');
-plot(prof_an_287_nr(:,id),hkm,'g');
-plot(prof_an_299_nr(:,id),hkm,'k');
-set(gca,'XScale','log')
-legend('287nm Far','299nm Far','287nm Near','299nm Near')
-xlabel('Signal (a.u.)');
-ylabel('Altitude (km)');
-title(['Ozone lidar signal at ',datestr(DateTime_avg(id))])
-ylim([0,3])
-grid on
+% id=3;
+% figure
+% plot(prof_an_287(:,id),hkm,'r');hold on
+% plot(prof_an_299(:,id),hkm,'b');
+% plot(prof_an_287_nr(:,id),hkm,'g');
+% plot(prof_an_299_nr(:,id),hkm,'k');
+% set(gca,'XScale','log')
+% legend('287nm Far','299nm Far','287nm Near','299nm Near')
+% xlabel('Signal (a.u.)');
+% ylabel('Altitude (km)');
+% title(['Ozone lidar signal at ',datestr(DateTime_avg(id))])
+% ylim([0,3])
+% grid on
 %% calculating the ozone number density from the pon and poff
+% SG filter derivative filter window length
 frame_len1=31;% ~100 m
 frame_len2=53; % ~200m
 frame_len3=81;% 303.75m
+% window length of smoothing the signal ratio
 sm_len_fr=31;
 sm_len_nr=15;
-
+% range bin sizes of the different derivative window length
 h1=533; % 0-2km 1:533
 h2=1333;% 2-5km 534:1333
 [N_O3_fr,ratio_P_fr]=retrieve_o3ND(prof_an_287,prof_an_299,start_bin_fr,...
@@ -124,3 +126,18 @@ plot(N_O3_merge_sm(:,id),hkm,'LineWidth',1.2);
 xlabel('Ozone number density (molecule / m^3)');ylabel('Altitude (km)');legend('merge')
 title(['Ozone number density (molecule / m^3) ',datestr(DateTime_avg(id),'yy/mm/dd HH:MM:ss')]);
 grid on;xlim([0,2.5e18])
+%% calculate air density
+% option 1: using International Standard Atmosphere (ISA)
+% option 2: using micro-ratiometer data (10-min resolution/daily average)
+% option 3: using radiosonde 
+
+
+% option 1: Standard T and P profile,
+% p0 = 1013.25*1e2; % surface pressure 1013.25 hpa = 101325pa
+% T0 = 288.15;% surface temp (K)
+[NDAir_m3,D_molex] = isa_NDair_m3(hkm,TimeInHour_avg);
+
+% option 2: using micro-ratiometer data (10-min resolution/daily average)
+mwrfile='~\mwrdata\2022-04-15_00-04-06_lv2';
+tdiff = 4; % tdiff is the time difference between the local timezone and utc
+[NDAir_m3,T,P] = mwr_NDair_m3(mwrfile,hkm,TimeInHour_avg,tdiff);
