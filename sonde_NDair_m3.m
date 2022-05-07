@@ -1,21 +1,23 @@
 
-function [NDAir_m3,D_molex] = isa_NDair_m3(hkm,p0,T0,d_sigma)
-% p0 = 1013.25*1e2;
-% T0 =288.15;
+function [NDAir_m3,D_molex] = sonde_NDair_m3(sondefile,hkm,d_sigma)
+sonde = readtable(sondefile,'Delimiter',' ','ReadVariableNames',true);
+P=1e2*sonde.pressure;% convert hpa to pa
+height = sonde.height;% in meter
+T = sonde.temperature + 273.15;% convert from T to K
+
+
+
 % Constant
 R=8.31446; %ideal gas constant(J/mol.K)
 g=9.80665;% gravitational acceleration (m/s^2)
 M=0.0289652;% molar mass of dry air 0.0289652 (kg/mol)
 Na=6.02214*10^23;% [/mol]
 
-T=T0-6.5*hkm;
-T(hkm>11)=216.65;
-P=((1-6.5*hkm/T0).^5.2561).*p0;
-P(hkm>11)=226.32*1e2*exp(-g/(R*216.65)*((hkm(hkm>11)-11)*1e3));
 % figure
 % plot(T,height/1000)
 % standar air number density
-NDAir_m3=Na/R.*P./T;
+NDAir_m3_sonde=Na/R.*P./T;
+NDAir_m3=interp1 (height./1e3,NDAir_m3_sonde,hkm,'linear','extrap');
 %% calculate the molecular number density and extinction
 lamda_1=287.2; %% unit: nm
 WAVE_1=lamda_1/(1e+3);  %% wavelength unit: micro, um
@@ -33,5 +35,4 @@ molex_1=sigma1*1e-4*NDAir_m3;   %% unit: m^-1
 
 delta_molex=(1-(lamda_2/lamda_1)^(-4))* molex_1;
 D_molex=delta_molex./d_sigma;
-
 

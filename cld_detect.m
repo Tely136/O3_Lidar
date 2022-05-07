@@ -1,4 +1,4 @@
-function [cldNum, cldBaseZ, cldCenterZ,cldBaseZ_ind,cldCenterZ_ind,cld_mask,pz2,d_Pz2]=cld_detect(prof,start_bin,end_bin,hkm)
+function [cldNum, cldBaseZ, cldCenterZ,cldBaseZ_ind,cldCenterZ_ind,cld_mask,pz2,d_Pz2]=cld_detect(prof,start_hkm,end_hkm,hkm)
 [len_h,len_t]=size(prof);
 cld_mask = false(size(prof));
 pz2=nan(size(prof));
@@ -16,6 +16,8 @@ end
 %take derivative on successive elements in the columns
 d_Pz2=diff(pz2,1,1);
 % search the cloud gradient between start_bin and end_bin
+start_bin = find(hkm >start_hkm,1,'first');
+end_bin = find(hkm >end_hkm,1,'first');
 cld_search_region = d_Pz2(start_bin:end_bin,:);
 N=27;% cloud gradient thickness threshold: the number of consecutive elements of the over_threshold gradient of a cloud
 

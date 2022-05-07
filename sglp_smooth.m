@@ -22,4 +22,6 @@ smprof(h1+1:h2,:)=temp(h1+1:h2,:);
 temp(start_bin:end,:)=sgolayfilt(prof(start_bin:end,:),order,movnum3);
 smprof(h2+1:end,:)=temp(h2+1:end,:);
 
+smprof = movmean(smprof,movnum1,1);
+
 end

@@ -1,60 +1,36 @@
 %% Function: read_OL_profiles()
 % Read ozone lidar signal profiles from the folder which contains a list of
-% Input: 
-% folder_path: string 
-% save_path: string
+%% Input: 
+% folder_path: string, the folder path which saves the data .txt files 
+% save_path: string, the path to save the results
 % nbins: int 1x1, number of bins of each profile
-% dz: float 1x1 vertical resolution
-% bgbins: int 1x1, number of bins at the end of the profile used as background
-% td: float 1x1 system dead time, the dead time correction parameter for photocounting signal
+% dz: float 1x1 the height in meter of each bin, for example, dz= 3.75m a 40MHz system
+% bgbins: int 1x1, number of bins to be averaged at the end of the profile as background
+% td: float 1x1 dead time constant, to calculate the true count rate Ct=Cm/(1-td*Cm)
 % nAvg: int 1x1 number of bins to perform time average 
 
-% Output: netcdf file ('netcdf4_classic')
+%% Output: 
+%  
 %  DateTime: datetime, Dim-(1, numFiles), datetime of each profiles
 %  TimeInHour: float, Dim-(1, numFiles), time in hour of each profiles
 %  Height: float, Dim- (nbin,1), height in meters
 %  hkm: float, Dim- (nbin,1), height in km.
-%  profile_287_an_raw: float, Dim-(nbin, numFiles), 287nm-Far channel analog raw data profile.
-%  profile_299_an_raw: float, Dim-(nbin, numFiles), 299nm-Far channel analog raw data profile.
-%  profile_287_nr_an_raw: float, Dim-(nbin, numFiles), 287nm-Near channel analog raw data profile.
-%  profile_299_nr_an_raw: float, Dim-(nbin, numFiles), 299nm-Near channel analog raw data profile.
+%  rawprof: structure, 8 fields, the raw signal profiles
 % 
-% background subtracted data
-% profile_287_an: float, Dim-(nbin, numFiles), 287nm-Far channel analog bg subtracted data profile.
-% profile_299_an: float, Dim-(nbin, numFiles), 299nm-Far channel analog bg subtracted data profile.
-% profile_287_nr_an: float, Dim-(nbin, numFiles), 287nm-Near channel analog bg subtracted data profile.
-% profile_299_nr_an: float, Dim-(nbin, numFiles), 299nm-Near channel analog bg subtracted data profile.
+%  rawprof.an287: float, Dim-(nbin, numFiles), 287nm-Far channel analog raw data profile.
+%  rawprof.an299: float, Dim-(nbin, numFiles), 299nm-Far channel analog raw data profile.
+%  rawprof.an287nr: float, Dim-(nbin, numFiles), 287nm-Near channel analog raw data profile.
+%  rawprof.an299nr: float, Dim-(nbin, numFiles), 299nm-Near channel analog raw data profile.
+%  rawprof.pc287: float, Dim-(nbin, numFiles), 287nm-Far channel PC raw data profile.
+%  rawprof.pc299: float, Dim-(nbin, numFiles), 299nm-Far channel PC raw data profile.
+%  rawprof.pc287nr: float, Dim-(nbin, numFiles), 287nm-Near channel PC raw data profile.
+%  rawprof.pc299nr: float, Dim-(nbin, numFiles), 299nm-Near channel PC raw data profile.
 % 
-% PC signal
-%  profile_287_pc_raw: float, Dim-(nbin, numFiles), 287nm-Far channel photocounting raw data profile.
-%  profile_299_pc_raw: float, Dim-(nbin, numFiles), 299nm-Far channel photocounting raw data profile.
-%  profile_287_nr_pc_raw: float, Dim-(nbin, numFiles), 287nm-Near channel photocounting raw data profile.
-%  profile_299_nr_pc_raw: float, Dim-(nbin, numFiles), 299nm-Near channel photocounting raw data profile.
-% 
-% background subtracted data
-% profile_287_pc: float, Dim-(nbin, numFiles), 287nm-Far channel photocounting bg subtracted data profile.
-% profile_299_pc: float, Dim-(nbin, numFiles), 299nm-Far channel photocounting bg subtracted data profile.
-% profile_287_nr_pc: float, Dim-(nbin, numFiles), 287nm-Near channel photocounting bg subtracted data profile.
-% profile_299_nr_pc: float, Dim-(nbin, numFiles), 299nm-Near channel photocounting bg subtracted data profile.
-% 
-% dead time corrected signal
-% profile_287_pc_corr: float, Dim-(nbin, numFiles), 287nm-Far channel photocounting dead time corrected data profile.
-% profile_299_pc_corr: float, Dim-(nbin, numFiles), 299nm-Far channel photocounting dead time corrected data profile.
-% profile_287_nr_pc_corr: float, Dim-(nbin, numFiles), 287nm-Near channel photocounting dead time corrected data profile.
-% profile_299_nr_pc_corr: float, Dim-(nbin, numFiles), 299nm-Near channel photocounting dead time corrected data profile.
-%
-% Time averaged profile:
+%  intermprof: structure, 12 fields, 8 time-averaged profiles and
+%  4 dead time corr PC signal profiles (after time-averaging)
+%  sigprof: structure, 8 fields, the background subtracted profiles
 %  DateTime_avg: datetime, Dim-(1, floor(numFiles/nAvg)), datetime of averaged profiles
 %  TimeInHour_avg: float, Dim-(1, floor(numFiles/nAvg)), time in hour of averaged profiles
-% profile_287_an_avgT
-% profile_299_an_avgT
-% profile_287_an_nr_avgT
-% profile_299_an_nr_avgT
-% 
-% profile_287_pc_avgT
-% profile_299_pc_avgT
-% profile_287_pc_nr_avgT
-% profile_299_pc_nr_avgT
 
 
 %%

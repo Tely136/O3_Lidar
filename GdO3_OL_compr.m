@@ -5,16 +5,16 @@
 clear all; close all;
 % Get a list of all txt files in the current folder, or subfolders of it.
 % Path of the folder that stores all the profile data of a selected date(.txt)
-folderPath='C:\Users\OzoneLidar\Documents\MATLAB\ozone lidar\groundOzoneData\';
-savepath='C:\Users\OzoneLidar\Documents\MATLAB\ozone lidar\ozone lidar data\ozone lidar results\';
-FileName='20211102_1112_O3_CCNYShed.txt';
+folderPath='/Users/Tinker/Documents/MATLAB/ozonelidar/gd_ozone_measur/';
+savepath='/Users/Tinker/Documents/MATLAB/ozonelidar/ozonelidar_repo/ozone_lidar_results/20220429/';
+FileName='20220429_O3_Lab.txt';
 fullFileName = [folderPath,FileName];
 %fprintf('Now reading file %s\n', fullFileName);
 % read data into a table
-T = readtable(fullFileName,'Format','%f %f %f %f %f %f %f %{dd/MM/yy}D %{HH:mm:ss}D','Delimiter',',');
-ground_O3_ppb=T{:,1};% 1st col ozone ppbv
+T = readtable(fullFileName,'Format','%f %f %f %f %f  %{dd/MM/yy}D %{HH:mm:ss}D','Delimiter',',','HeaderLines', 0, 'ReadVariableNames', false);
+ground_O3_ppb=T{:,2};% 1st col ozone ppbv
 %last two cols are the datetime (local time)
-T.Var8.Format='dd/MM/yy HH:mm:ss';
+T.Var6.Format='dd/MM/yy HH:mm:ss';
 ground_O3_ppb_datetime=T{:,end-1} + timeofday(T{:,end});
 %% load ozone lidar measurement 
 disp('Select the ozone lidar retrieval at 550m file(.mat)')
