@@ -18,8 +18,8 @@ start_bin_fr=200;
 start_bin_nr=14;
 [new_sigprof,hkm_fr,hkm_nr] = gate_prof(sigprof,start_bin_fr,start_bin_nr,hkm);
 %% Calculate the merge ad pc signal
-[new_sigprof.merge287 regR287]=adpc_glue_func(new_sigprof.an287,new_sigprof.pc287,5,10,hkm_fr,1);
-[new_sigprof.merge299 regR299]=adpc_glue_func(new_sigprof.an299,new_sigprof.pc299,5,10,hkm_fr,1);
+[new_sigprof.merge287fr regR287]=adpc_glue_func(new_sigprof.an287,new_sigprof.pc287,5,10,hkm_fr,1);
+[new_sigprof.merge299fr regR299]=adpc_glue_func(new_sigprof.an299,new_sigprof.pc299,5,10,hkm_fr,1);
 [new_sigprof.merge287nr regR287nr]=adpc_glue_func(new_sigprof.an287nr,new_sigprof.pc287nr,3,7,hkm_nr,1);
 [new_sigprof.merge299nr regR299nr]=adpc_glue_func(new_sigprof.an299nr,new_sigprof.pc299nr,3,7,hkm_nr,1);
 
@@ -52,17 +52,26 @@ prof_pc_299 = new_sigprof.pc299; %prof_pc_299(cld_mask)=nan;
 prof_pc_287_nr = new_sigprof.pc287nr; 
 prof_pc_299_nr = new_sigprof.pc299nr; 
 
-prof_merge_287=new_sigprof.merge287; %prof_merge_287(cld_mask)=nan;
-prof_merge_299=new_sigprof.merge299; %prof_merge_299(cld_mask)=nan;
+prof_merge_287_fr=new_sigprof.merge287fr; %prof_merge_287(cld_mask)=nan;
+prof_merge_299_fr=new_sigprof.merge299fr; %prof_merge_299(cld_mask)=nan;
 prof_merge_287_nr=new_sigprof.merge287nr; 
 prof_merge_299_nr=new_sigprof.merge299nr; 
+
+start_merge_hkm = 0.8;
+end_merge_hkm =0.9;
+z1 = 0.8;
+z2 =1.2;
+prof_merge_287 = merge_nr_fr_prof(prof_merge_287_nr,prof_merge_287_fr,start_merge_hkm,end_merge_hkm,hkm_fr,hkm_nr,z1,z2);
+prof_merge_299 = merge_nr_fr_prof(prof_merge_299_nr,prof_merge_299_fr,start_merge_hkm,end_merge_hkm,hkm_fr,hkm_nr,z1,z2);
+
 %% ploting the cloud screened smoothed profiles
 id=3;
 y_lim =[0,10];
 tit_str='CCNY-O3-DIAL AD-PC Merged Signal ';
 xlb='Merged Signal (MHz)';
-plot_fr_nr_Prof(prof_merge_287,prof_merge_299,prof_merge_287_nr,prof_merge_299_nr,...
-                hkm_fr,hkm_nr,DateTime_avg,id,tit_str,xlb,y_lim);
+le=string(['287nm Far','299nm Far','287nm Merge','299nm Merge']);
+plot_fr_nr_Prof(prof_merge_287_fr,prof_merge_299_fr,prof_merge_287,prof_merge_299,...
+                hkm_fr,hkm_nr,DateTime_avg,id,tit_str,xlb,y_lim,le);
 %% calculating the ozone number density from the pon and poff
 % SG filter derivative filter window length
 frame_len1=31;% ~100 m
@@ -73,10 +82,12 @@ frame_len3=81;% 303.75m
 h1_hkm=2; % 0-2km 1:533
 h2_hkm=5;% 2-5km 534:1333
 
-[N_O3_fr,ratio_P_fr]=retrieve_o3ND(prof_merge_287,prof_merge_299,...
-                                   frame_len1,frame_len2,frame_len3,h1_hkm,h2_hkm,hkm_fr);
+[N_O3,ratio_P]=retrieve_o3ND(prof_merge_287,prof_merge_299,...
+                                   frame_len1,frame_len2,frame_len3,h1_hkm,h2_hkm,hkm_nr);
 [N_O3_nr,ratio_P_nr]=retrieve_o3ND(prof_an_287_nr,prof_an_299_nr,...
                                    frame_len1,frame_len2,frame_len3,1.5,h2_hkm,hkm_nr);
+[N_O3_fr,ratio_P_fr]=retrieve_o3ND(prof_merge_287_fr,prof_merge_299_fr,...
+                                   frame_len1,frame_len2,frame_len3,1.5,h2_hkm,hkm_fr);
                                
 %% Plot the ozone number density profile for near range and far range
 id=4;
@@ -89,7 +100,8 @@ id=4;
 figure
 plot(N_O3_fr(:,id),hkm_fr,'LineWidth',1.2);hold on
 plot(N_O3_nr(:,id),hkm_nr,'LineWidth',1.2);
-xlabel('Ozone number density (molecule / m^3)');ylabel('Altitude (km)');legend('Far range','Near range')
+plot(N_O3(:,id),hkm_nr,'LineWidth',1.2);
+xlabel('Ozone number density (molecule / m^3)');ylabel('Altitude (km)');legend('Far','Near','Merge')
 title(['Ozone number density (molecule / m^3) ',datestr(DateTime_avg(id),'yy/mm/dd HH:MM:ss')]);
 grid on;xlim([0,2.5e18])
 
@@ -141,14 +153,14 @@ d_sigma=(sigmaOn-sigmaOff)*(10^-2)^2; % delta cross section (m^2/molecule)
 %% option 1: Standard T and P profile,
 % p0 = 1013.25*1e2; % surface pressure 1013.25 hpa = 101325pa
 % T0 = 288.15;% surface temp (K)
-% [NDAir_m3_prof,D_molex_prof] = isa_NDair_m3(hkm_nr,p0,T0,d_sigma);
+% [NDAir_m3_prof,D_molex_prof,am287,am299] = isa_NDair_m3(hkm_nr,p0,T0,d_sigma);
 % len_t=length(TimeInHour_avg);
 % NDAir_m3= repmat(NDAir_m3_prof, 1,len_t);
 % D_molex = repmat(D_molex_prof, 1,len_t);
 
 %% option 2: using radiosonde data
 sondefile='/Users/Tinker/Documents/MATLAB/ozonelidar/sondeData/20220429_OKX_z12.txt';
-[NDAir_m3_prof,D_molex_prof] = sonde_NDair_m3(sondefile,hkm_nr,d_sigma);
+[NDAir_m3_prof,D_molex_prof,am287,am299] = sonde_NDair_m3(sondefile,hkm_nr,d_sigma);
 len_t=length(TimeInHour_avg);
 NDAir_m3 = repmat(NDAir_m3_prof, 1,len_t);
 D_molex = repmat(D_molex_prof, 1,len_t);
@@ -176,6 +188,10 @@ D_molex = repmat(D_molex_prof, 1,len_t);
 % [NDAir_m3,T,P] = mwr_NDair_m3(mwrfile,hkm,TimeInHour_avg,tdiff);
 
 %% Aerosol backscatter retrieval and correction
+
+[absc_299_retri,ND_O3,N_O3_bsc,D_aext]=OL299_aero_retrieval(N_O3,NDAir_m3_prof,prof_merge_299,hkm_nr)
+
+% option2 using ceilometer data 
 aodfile='/Users/Tinker/Documents/MATLAB/ozonelidar/AOD/20220201_20220501_CCNY.txt';
 timediff = 4; % time difference between the local time and utc time (EDT = 4, EST =5)
 [chm15k,N_O3_bsc,D_aext]=aero_ext_bsc_retrieval(NDAir_m3_prof,d_sigma,hkm_nr,TimeInHour_avg,timediff,aodfile);

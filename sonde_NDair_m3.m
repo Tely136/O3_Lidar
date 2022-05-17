@@ -1,5 +1,5 @@
 
-function [NDAir_m3,D_molex] = sonde_NDair_m3(sondefile,hkm,d_sigma)
+function [NDAir_m3,D_molex,molex_1,molex_2] = sonde_NDair_m3(sondefile,hkm,d_sigma)
 sonde = readtable(sondefile,'Delimiter',' ','ReadVariableNames',true);
 P=1e2*sonde.pressure;% convert hpa to pa
 height = sonde.height;% in meter
@@ -32,7 +32,7 @@ sigma1=(6+3*0.035)/(6-7*0.035)*8*PI*PI*PI*(ms1*ms1-1)*(ms1*ms1-1)/3.0/WAVE_1/WAV
                %%% Rayleigh scattering cross section, unit: cm2 
                %%% Corrected by depolarization ratio delta=0.035
 molex_1=sigma1*1e-4*NDAir_m3;   %% unit: m^-1 
-
+molex_2=(lamda_2/lamda_1)^(-4)* molex_1;
 delta_molex=(1-(lamda_2/lamda_1)^(-4))* molex_1;
 D_molex=delta_molex./d_sigma;
 

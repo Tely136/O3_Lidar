@@ -1,5 +1,5 @@
 
-function [NDAir_m3,D_molex] = isa_NDair_m3(hkm,p0,T0,d_sigma)
+function [NDAir_m3,D_molex,molex_1,molex_2] = isa_NDair_m3(hkm,p0,T0,d_sigma)
 % p0 = 1013.25*1e2;
 % T0 =288.15;
 % Constant
@@ -30,7 +30,7 @@ sigma1=(6+3*0.035)/(6-7*0.035)*8*PI*PI*PI*(ms1*ms1-1)*(ms1*ms1-1)/3.0/WAVE_1/WAV
                %%% Rayleigh scattering cross section, unit: cm2 
                %%% Corrected by depolarization ratio delta=0.035
 molex_1=sigma1*1e-4*NDAir_m3;   %% unit: m^-1 
-
+molex_2=(lamda_2/lamda_1)^(-4)* molex_1;
 delta_molex=(1-(lamda_2/lamda_1)^(-4))* molex_1;
 D_molex=delta_molex./d_sigma;
 
