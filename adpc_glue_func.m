@@ -20,7 +20,6 @@ regR=[];
 for i=1:nn
     p1=ch1_avep(:,i); % A/D signal data
     p1PC=ch1_avepPC(:,i); % PC signal data
-    
     k=find(p1PC>=PM1 & p1PC<=PM2 & zkm>zkm0); % choose the PC and AD data for the regression, e.g. 5-20 MHz
     x1=p1(k); % A/D data
     y1=p1PC(k); %PC data
@@ -29,7 +28,13 @@ for i=1:nn
     k2=k(length(k)); % high-altitude index
     R=corrcoef(x1,y1);
     regR=[regR;R(2),ps(1),ps(2)]; 
-     
+    if R(2)<0.8
+        figure;
+        plot(x1,y1,'bo'); hold on;
+        xlabel('AD');
+        ylabel('PC');   
+        title(['Range Z:',num2str(zkm(k1)),' to ',num2str(zkm(k2)),' with id = ',num2str(i)])
+    end
     % get new "glued" signal profile
     ch1_newp(1:k1,i)=p1(1:k1)*ps(1)+ps(2); % when the PC>PM2 20MHz (lower altitude), Convert A/D data to PC (using AD only)
     ch1_newp(k2:mm,i)=p1PC(k2:mm); % when the PC<PM1 (5MHz), using the PC data only
@@ -37,13 +42,13 @@ for i=1:nn
     tmp1=ps(1)*p1(k1:k2)+ps(2);  % converted PC data from the AD data
     tmp2=p1PC(k1:k2); % PC data
     ch1_newp(k1:k2,i)=(tmp1+tmp2)/2; % average them (PC and converted PC from AD)  
-    
-%     figure(10); hold on;
+%     
+%     figure;
 %     plot(x1,y1,'bo'); hold on;
 %     xlabel('AD');
 %     ylabel('PC');
 %     plot(x1,tmp1,'r-');  hold on;
-   
+
 end
 
 return;

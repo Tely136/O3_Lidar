@@ -7,7 +7,7 @@ cldBaseZ_ind=nan(3,len_t);
 cldCenterZ_ind=nan(3,len_t);
 cldBaseZ=nan(3,len_t);
 cldCenterZ=nan(3,len_t);
-Th_cld=2.5e-3;
+Th_cld=10e-3;
 
 %Calculate the pz^2
 for i=1:len_t
