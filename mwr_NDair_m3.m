@@ -49,3 +49,10 @@ end
  
 o3dial_hr_avg_utc = TimeInHour_avg+tdiff;
 % interpolate the air density to mat(hkm,TimeInHour_avg)
+t_mwr= TimeInHour_avg - tdiff;% time difference between the local time and utc time (EDT = 4; EST =5)
+h_mwr=height; % in km
+
+[X_time,Y_height] = meshgrid(t_mwr,h_mwr'); % grid of the original matrix
+[Xq_time,Yq_height] = meshgrid(TimeInHour_avg,hkm);% grid of the query matrix: machting the ozone dial
+NDAir_m3_mat=interp2(X_time,Y_height,ND_air,Xq_time,Yq_height);
+D_aext_interp=interp2(X_time,Y_height,D_aext,Xq_time,Yq_height);

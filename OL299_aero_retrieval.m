@@ -35,7 +35,7 @@ r299 = nan(size(prof_299));
 % range bin sizes of the different derivative window length
 h1_hkm=2; % 0-2km 1:533
 h2_hkm=5;% 2-5km 534:1333
-bscframeLen1=31;% ~100 m
+bscframeLen1=21;% ~78.5 m
 bscframeLen2=53; % ~200m
 bscframeLen3=81;% 303.75m
 bscdh1=find(hkm>h1_hkm,1,'first');

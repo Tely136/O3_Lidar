@@ -12,7 +12,7 @@ ind=1;
     pblfp2=chm15data.pblfp2{ind};
     cbhAveTime=chm15data.cbh{ind};
     figure
-    Iave=imagesc(TimeArr,chm15data.Height,DataAve,[0,0.1]);
+    Iave=imagesc(TimeArr,chm15data.Height,DataAve,[0,0.5]);
     set(gca,'YDir','normal');%,'ColorScale','log');
     ylim([0,15])
     colormap('jet');
@@ -85,7 +85,7 @@ aod_time=aod_aeronet.TimeInHour_utc(ind_aod);
 ae_1020_340=mean(aod_aeronet.ae_1020_340(ind_aod),'omitnan');
 
 % movmean of 30min 
-pbltopAveTime(pblfp2)=nan;
+% pbltopAveTime(pblfp2)=nan;
 pbl_aero=movmean(pbltopAveTime,3,'omitnan');
 cbh_aero=cbhAveTime;
 %attbs=movmean(chm15data.Avedata{ind}(1:m,:),3,2,'omitnan');
@@ -192,7 +192,7 @@ if str=='Y'
 
     figure
     subplot(2,2,1)
-    Iaero=imagesc(time_aeroprof,rv0,aero_bsa,[0,1e-3]);
+    Iaero=imagesc(time_aeroprof,rv0,aero_bsa,[0,5e-3]);
     hold on
     plot(time_aeroprof,cbh_aero,'go')
     plot(time_aeroprof,pbl_aero,'m+')
@@ -217,7 +217,7 @@ if str=='Y'
     title([file_datestr,' CHM15k aerosol extinction (/km) at 1064nm']);
     
     subplot(2,2,3)
-    Iaero=imagesc(time_aeroprof,rv0,aero_r,[0,10]);
+    Iaero=imagesc(time_aeroprof,rv0,aero_r,[0,20]);
     set(Iaero,'AlphaData',~isnan(aero_bsa))
     set(gca,'YDir','normal');
     colormap('jet');

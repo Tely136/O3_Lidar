@@ -7,7 +7,7 @@ cldBaseZ_ind=nan(3,len_t);
 cldCenterZ_ind=nan(3,len_t);
 cldBaseZ=nan(3,len_t);
 cldCenterZ=nan(3,len_t);
-Th_cld=2.5e-3;
+Th_cld=5e-3;
 
 %Calculate the pz^2
 for i=1:len_t
@@ -19,7 +19,7 @@ d_Pz2=diff(pz2,1,1);
 start_bin = find(hkm >start_hkm,1,'first');
 end_bin = find(hkm >end_hkm,1,'first');
 cld_search_region = d_Pz2(start_bin:end_bin,:);
-N=27;% cloud gradient thickness threshold: the number of consecutive elements of the over_threshold gradient of a cloud
+N=25;% cloud gradient thickness threshold: the number of consecutive elements of the over_threshold gradient of a cloud
 
 % find all the index of gradient profile larger than Threashold
 id_cld=cld_search_region>Th_cld;

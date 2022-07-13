@@ -6,8 +6,8 @@ clear all; close all;
 % Get a list of all txt files in the current folder, or subfolders of it.
 % Path of the folder that stores all the profile data of a selected date(.txt)
 folderPath='/Users/Tinker/Documents/MATLAB/ozonelidar/gd_ozone_measur/';
-savepath='/Users/Tinker/Documents/MATLAB/ozonelidar/ozonelidar_repo/ozone_lidar_results/20220429/';
-FileName='20220429_O3_Lab.txt';
+savepath='/Users/Tinker/Documents/MATLAB/ozonelidar/ozonelidar_repo/ozone_lidar_results/20220521/';
+FileName='20220521_O3_Lab.txt';
 fullFileName = [folderPath,FileName];
 %fprintf('Now reading file %s\n', fullFileName);
 % read data into a table
@@ -16,6 +16,20 @@ ground_O3_ppb=T{:,2};% 1st col ozone ppbv
 %last two cols are the datetime (local time)
 T.Var6.Format='dd/MM/yy HH:mm:ss';
 ground_O3_ppb_datetime=T{:,end-1} + timeofday(T{:,end});
+%% Ozone monitor from shed
+folderPath='/Users/Tinker/Documents/MATLAB/ozonelidar/gd_ozone_measur/';
+savepath='/Users/Tinker/Documents/MATLAB/ozonelidar/ozonelidar_repo/ozone_lidar_results/20220521/';
+FileName='20220520_0525_Shed_O3.txt';
+fullFileName = [folderPath,FileName];
+%fprintf('Now reading file %s\n', fullFileName);
+% read data into a table
+T = readtable(fullFileName,'Format','%f %f %f %f %f %f %f %f  %{dd/MM/yy}D %{HH:mm:ss}D','Delimiter',',','HeaderLines', 0, 'ReadVariableNames', false);
+ground_O3_ppb=T{:,2};% 1st col ozone ppbv
+%last two cols are the datetime (local time)
+T.Var9.Format='dd/MM/yy HH:mm:ss';
+ground_O3_ppb_datetime=T{:,end-1} + timeofday(T{:,end});
+
+
 %% load ozone lidar measurement 
 disp('Select the ozone lidar retrieval at 550m file(.mat)')
 instruction='Select the ozone lidar retrieval file (.mat)';

@@ -132,6 +132,15 @@ intermprof.pc299corr=profile_299_pc_corr;
 intermprof.pc287nrcorr=profile_287_nr_pc_corr;
 intermprof.pc299nrcorr=profile_299_nr_pc_corr;
 %% Background subtraction signal
+bg_287_an= nan(1,len_time_avg);
+bg_299_an= nan(1,len_time_avg);
+bg_287_nr_an= nan(1,len_time_avg);
+bg_299_nr_an= nan(1,len_time_avg);
+
+bg_287_pc= nan(1,len_time_avg);
+bg_299_pc= nan(1,len_time_avg);
+bg_287_nr_pc= nan(1,len_time_avg);
+bg_299_nr_pc= nan(1,len_time_avg);
 
 % background subtracted ad
 profile_287_an=nan(size(profile_287_an_avgT));% 
@@ -145,6 +154,17 @@ profile_299_pc=nan(size(profile_287_an_avgT));
 profile_287_nr_pc=nan(size(profile_287_an_avgT));% 
 profile_299_nr_pc=nan(size(profile_287_an_avgT));
 for k=1:len_time_avg
+    bg_287_an(k)= mean(profile_287_an_avgT(nbin-bgbins:nbin,k));
+    bg_299_an(k)= mean(profile_299_an_avgT(nbin-bgbins:nbin,k));
+    bg_287_nr_an(k)= mean(profile_287_nr_an_avgT(nbin-bgbins:nbin,k));
+    bg_299_nr_an(k)= mean(profile_299_nr_an_avgT(nbin-bgbins:nbin,k));
+    
+    bg_287_pc(k)= mean(profile_287_pc_corr(nbin-bgbins:nbin,k));
+    bg_299_pc(k)= mean(profile_299_pc_corr(nbin-bgbins:nbin,k));
+    bg_287_nr_pc(k)= mean(profile_287_nr_pc_corr(nbin-bgbins:nbin,k));
+    bg_299_nr_pc(k)= mean(profile_299_nr_pc_corr(nbin-bgbins:nbin,k));
+
+    
     profile_287_an(:,k)= profile_287_an_avgT(:,k)-mean(profile_287_an_avgT(nbin-bgbins:nbin,k));
     profile_299_an(:,k)= profile_299_an_avgT(:,k)-mean(profile_299_an_avgT(nbin-bgbins:nbin,k));
     profile_287_nr_an(:,k)= profile_287_nr_an_avgT(:,k)-mean(profile_287_nr_an_avgT(nbin-bgbins:nbin,k));
@@ -166,6 +186,15 @@ sigprof.pc287=profile_287_pc;
 sigprof.pc299=profile_299_pc;
 sigprof.pc287nr=profile_287_nr_pc;
 sigprof.pc299nr=profile_299_nr_pc;
+
+sigprof.bgan287=bg_287_an;
+sigprof.bgan299=bg_299_an;
+sigprof.bgan287nr=bg_287_nr_an;
+sigprof.bgan299nr=bg_299_nr_an;
+sigprof.bgpc287=bg_287_pc;
+sigprof.bgpc299=bg_299_pc;
+sigprof.bgpc287nr=bg_287_nr_pc;
+sigprof.bgpc299nr=bg_299_nr_pc;
 
 OLfileName = [save_path,'ol',datestr(DateTime(1),'yymmdd_HHMM'),'_',datestr(DateTime(end),'HHMM'),'.mat'];
 save(OLfileName,'rawprof','sigprof','intermprof',...
