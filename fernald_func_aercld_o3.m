@@ -6,7 +6,7 @@
 %% and retrieve the signal of 299nm for Ozone DIAL 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function  [aero_para]=fernald_func_aercld_o3(zkm,lidar_p,bm,S1,Rc,Z1,Z2,Z1_c,Z2_c,ao3); 
+function  [aero_para]=fernald_func_aercld_o3(zkm,lidar_p,bm,S1,Rc,Z1,Z2,Z1_c,Z2_c,ao3) 
 % Input variables (array): 
 %    zkm: Range or altitude in km
 %    lidar_p: lidar signal profile subtracting from background noise
@@ -27,18 +27,19 @@ S1_cloud=18.5;  % Cloud extinction-to-backscatter ratio
 x_dim=size(lidar_p,1);
 % x_dim=size(xx,1);
 % xx: the range corrected signal (lidar_p.*zkm^2)* attenuation due to ozone
-T_o3=zeros(x_dim,1)+1;
-for i=2:x_dim
-    a_temp_o3=trapz(zkm(1:i),ao3(1:i));
-    T_o3(i)=exp(-2*a_temp_o3);
-end  
-xx=lidar_p.*zkm.*zkm.*(1./T_o3);
+% T_o3=zeros(x_dim,1)+1;
+% for i=2:x_dim
+%     a_temp_o3=trapz(zkm(1:i),ao3(1:i));
+%     T_o3(i)=exp(-2*a_temp_o3);
+% end  
+% xx=lidar_p.*zkm.*zkm./T_o3;
+xx=lidar_p.*zkm.*zkm;
 % lidar_p=xx./(zkm.^2);
 
 % Random noise Pb for the reference: last 200-points (267*3.75m=1000 m )
 pts=200;
-sd=nanstd(lidar_p(x_dim-pts:x_dim));
-ave=nanmean(lidar_p(x_dim-pts:x_dim));
+sd=std(lidar_p(x_dim-pts:x_dim),'omitnan');
+ave=mean(lidar_p(x_dim-pts:x_dim),'omitnan');
 SNR=lidar_p/sd;
 
 % Tm2=zeros(x_dim,1)+1;
@@ -80,12 +81,13 @@ for i=kk:-1:2
       else 
           S1_aer=S1;
       end
-      aa=(S1_aer-S2)*(bm(i)+bm(i-1))*(zkm(i)-zkm(i-1));
+      oo= (ao3(i)+ao3(i-1))/S2; % add 
+      aa=(S1_aer-S2)*(bm(i)+bm(i-1)+oo)*(zkm(i)-zkm(i-1));
       mm=xx(i-1)*exp(aa);
-      b(i-1)=mm/(xx(i)/(b(i)+bm(i))+S1_aer*(xx(i)+xx(i-1)*exp(aa) )*(zkm(i)-zkm(i-1)))-bm(i-1);
+      b(i-1)=mm/(xx(i)/(b(i)+bm(i)+ao3(i)/S2)+S1_aer*(xx(i)+xx(i-1)*exp(aa))*(zkm(i)-zkm(i-1)))-(bm(i-1));
       r(i-1)=1.0 +b(i-1)/bm(i-1);
       ext(i-1)=b(i-1)*S1_aer;
-  end
+end
 %% Forward integration
 for i=kk:x_dim-1
       if(zkm(i+1)>Z1_c & zkm(i+1)<Z2_c) 

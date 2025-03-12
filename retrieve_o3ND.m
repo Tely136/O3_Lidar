@@ -11,8 +11,6 @@ ratio_P(ratio_P<0)=nan;
 % ratio_P = sgolayfilt(sgolayfilt(ratio_P,1,sm_len),1,sm_len);
 Ln_ratio_P=log(ratio_P);
 
-
-
 % Using covolution with the SG filter to calculate the first order
 % derivative 
 

@@ -21,11 +21,11 @@ len_t= size(prof_fr,2);
 prof_merge=prof_nr;
 
 % the range below start_merge_hkm 
-ind_cat_low_nr= ~(hkm_nr>start_merge_hkm);% the range that <= start_merge_hkm
+ind_cat_low_nr= hkm_nr<=start_merge_hkm;% the range that <= start_merge_hkm
 
 % the range above end_merge_hkm using prof_fr
-ind_cat_high_nr= ~(hkm_nr<end_merge_hkm);% the range that >= end_merge_hkm
-ind_cat_high_fr= ~(hkm_fr<end_merge_hkm);
+ind_cat_high_nr= hkm_nr>=end_merge_hkm;% the range that >= end_merge_hkm
+ind_cat_high_fr= hkm_fr>=end_merge_hkm;
 prof_merge(ind_cat_high_nr,:)= prof_fr(ind_cat_high_fr,:);
 % Concanation of two channel
 ind_hh_fr=hkm_fr<end_merge_hkm & hkm_fr>start_merge_hkm;

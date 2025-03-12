@@ -16,7 +16,8 @@ P(hkm>11)=226.32*1e2*exp(-g/(R*216.65)*((hkm(hkm>11)-11)*1e3));
 % plot(T,height/1000)
 % standar air number density
 NDAir_m3=Na/R.*P./T;
-%% calculate the molecular number density and extinction
+
+%% calculate the molecular number density and extinction coefficients
 lamda_1=287.2; %% unit: nm
 WAVE_1=lamda_1/(1e+3);  %% wavelength unit: micro, um
 lamda_2=299.1; %% unit: nm

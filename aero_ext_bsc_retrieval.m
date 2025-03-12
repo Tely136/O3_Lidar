@@ -13,17 +13,18 @@ ind=1;
     cbhAveTime=chm15data.cbh{ind};
     figure
     Iave=imagesc(TimeArr,chm15data.Height,DataAve,[0,0.5]);
-    set(gca,'YDir','normal');%,'ColorScale','log');
-    ylim([0,15])
+    set(gca,'YDir','normal','FontSize',15,'ColorScale','log');
+    ylim([0,7])
     colormap('jet');
     colorbar;
-    xlabel('Time (UTC Hour)','FontSize',13);
-    ylabel('Altitude (km)','FontSize',13);
+    xlabel('Time (UTC Hour)','FontSize',15);
+    ylabel('Altitude (km)','FontSize',15);
     hold on
+%     plot(TimeArr,pbltopAveTime,'m+','MarkerSize',8);
     plot(TimeArr(~pblfp2),pbltopAveTime(~pblfp2),'m+','MarkerSize',8);
-    plot(TimeArr(pblfp2),pbltopAveTime(pblfp2),'rx','MarkerSize',8);
+%     plot(TimeArr(pblfp2),pbltopAveTime(pblfp2),'m+','MarkerSize',8);
     plot(TimeArr,cbhAveTime,'go','MarkerSize',8);
-    title([datestr(chm15data.Date{ind},'yyyymmdd'),' CCNY Ceilometer RCS (a.u.) at 1064nm'],'FontSize',13);
+    title([datestr(chm15data.Date{ind},'yyyymmdd'),' CCNY Ceilometer RCS (a.u.) at 1064nm'],'FontSize',15);
     legend('PBLH','CldBase','FontSize',11);
     
 
@@ -94,9 +95,9 @@ attbs(1:13,:)=ones(13,1)*attbs(13,:);
 time_aeroprof=chm15data.AveTime{ind};
 
 
-%range movmean <1.5km 100, 1.5-3km 200m, >3km 300m
-movnum1=7;
-movnum2=13;
+%range movmean <1.5km 45m, 1.5-3km 75m, >3km 300m
+movnum1=3;
+movnum2=5;
 movnum3=20;
 attbs_sm=nan(m,length(time_aeroprof));
 
@@ -119,6 +120,7 @@ aero_lidarratio=nan(1,length(time_aeroprof));
 % 
 
 cl_chm15=162;
+cl_chm15=210;
 %% fix the lidar constant with aod
 prompt = 'Do you want to use the Aeronet AOD to constrain the lidar ratio? (if no aeronet AOD available or choosing no, S=40sr will be used)? Y/N [N]:';
 str = input(prompt,'s');
@@ -191,19 +193,19 @@ if str=='Y'
     
 
     figure
-    subplot(2,2,1)
-    Iaero=imagesc(time_aeroprof,rv0,aero_bsa,[0,5e-3]);
+%     subplot(2,2,1)
+    Iaero=imagesc(time_aeroprof,rv0,aero_bsa,[0,2e-3]);
     hold on
     plot(time_aeroprof,cbh_aero,'go')
     plot(time_aeroprof,pbl_aero,'m+')
     set(Iaero,'AlphaData',~isnan(aero_bsa))
-    set(gca,'YDir','normal');
+    set(gca,'YDir','normal','FontSize',15);
     colormap('jet');
     colorbar;
     legend('CldBase','PBLH')
     xlabel('Time (UTC Hour)');
     ylabel('Altitude (km)');
-    title([file_datestr,' CHM15k aerosol backscatter (/km/sr) at 1064nm']);
+    title([file_datestr,' CCNY ceilometer aerosol backscatter (/km/sr) at 1064nm']);
     
     
     subplot(2,2,2)
@@ -247,9 +249,13 @@ if str=='N'|str=='n'|isnan(ae_1020_340)|ae_1020_340<1
 else
     ae=ae_1020_340;
 end
+
+aero_bsa_sm = movmean(aero_bsa,10,1);
+aero_ext_sm = movmean(aero_ext,10,1);
+
 S1= 8*pi/3;
-absc_299=(1064/299)^ae*aero_bsa;
-absc_287=(1064/287)^ae*aero_bsa;
+absc_299=(1064/299)^ae*aero_bsa_sm;
+absc_287=(1064/287)^ae*aero_bsa_sm;
 mbsc_299=(1064/299)^4/S1*am_interp;
 mbsc_287=(1064/287)^4/S1*am_interp;
 totbsc_299off=absc_299+mbsc_299;
@@ -280,11 +286,11 @@ for i=1:length(time_aeroprof)
   diff(1:bscdh1)=diff1(1:bscdh1);
   diff(bscdh1+1:bscdh2)=diff2(bscdh1+1:bscdh2);
   diff(bscdh2+1:end)=diff3(bscdh2+1:end);
-  N_O3_bsc(:,i)=1/(2*d_sigma).*diff;
+  N_O3_bsc(:,i)=1/2*diff;%./d_sigma;
 end
 
-delta_aext=1e-3*((1064/287.2)^ae-(1064/299.1)^ae)*aero_ext;% aerosol extinction in (/m)
-D_aext=delta_aext./d_sigma;
+delta_aext=1e-3*((1064/287.2)^ae-(1064/299.1)^ae)*aero_ext_sm;% aerosol extinction in (/m)
+D_aext=delta_aext;%./d_sigma;
 
 %% interpolate the aersosl correction terms to the ozone number density
 t_chm15k=time_aeroprof - timediff;% time difference between the local time and utc time (EDT = 4; EST =5)
@@ -292,8 +298,8 @@ h_chm15k=rv0; % in km
 
 [X_time,Y_height] = meshgrid(t_chm15k,h_chm15k'); % grid of the original matrix
 [Xq_time,Yq_height] = meshgrid(TimeInHour_avg,hkm);% grid of the query matrix: machting the ozone dial
-N_O3_bsc_interp=interp2(X_time,Y_height,N_O3_bsc,Xq_time,Yq_height);
-D_aext_interp=interp2(X_time,Y_height,D_aext,Xq_time,Yq_height);
+N_O3_bsc_interp=interp2(X_time,Y_height,N_O3_bsc,Xq_time,Yq_height)./d_sigma;
+D_aext_interp=interp2(X_time,Y_height,D_aext,Xq_time,Yq_height)./d_sigma;
 
 %% save the data
 chm15kRetrieval.h1=h1;

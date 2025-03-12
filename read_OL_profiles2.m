@@ -72,6 +72,13 @@ for k = 1 : numFiles
     % read both data and metadata from the filestore
 % AD signal
     Data=read(fds);
+%     if k == 1
+%         data_str=Data.textdata(2,1);
+%         expression = ['"Far (?<f>\d*\.\d*)\D+(?<n>\d*\.\d*)\D."'];
+%         token= regexp(data_str,expression,'names');
+%         start_bin_fr=ceil(str2num(token{1}.f)*150/3.75)+6;
+%         start_bin_nr=ceil(str2num(token{1}.n)*150/3.75)+6;
+%     end 
     profile_287_an_raw(:,k)= Data.data(:,1);
     profile_299_an_raw(:,k)= Data.data(:,3);
     profile_287_nr_an_raw(:,k)= Data.data(:,5);
@@ -174,6 +181,8 @@ for k=1:len_time_avg
     profile_299_pc(:,k)= profile_299_pc_corr(:,k)-mean(profile_299_pc_corr(nbin-bgbins:nbin,k));
     profile_287_nr_pc(:,k)= profile_287_nr_pc_corr(:,k)-mean(profile_287_nr_pc_corr(nbin-bgbins:nbin,k));
     profile_299_nr_pc(:,k)= profile_299_nr_pc_corr(:,k)-mean(profile_299_nr_pc_corr(nbin-bgbins:nbin,k));
+ 
+
 end 
     % save the background subtracted signal in the structure "sigprof"
 

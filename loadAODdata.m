@@ -16,10 +16,14 @@ TimeInHour_utc=h+m./60+s./3600;
 % AOD at 1020nm 
 aod_1020=cell2mat(cellfun(@str2double,table2array(tb(8:end,6)),'UniformOutput',false));
 aod_340=cell2mat(cellfun(@str2double,table2array(tb(8:end,26)),'UniformOutput',false));
+aod_380=cell2mat(cellfun(@str2double,table2array(tb(8:end,25)),'UniformOutput',false));
+
 aod_1020(aod_1020<0)=nan;
 aod_340(aod_340<0)=nan;
+aod_380(aod_380<0)=nan;
 % Angstrom exponent 
 aod_ae_1020_340=-log(aod_1020./aod_340)./log(1020/340);% aod1/aod2=(w1/w2)^(-a)
+aod_ae_380_340=-log(aod_380./aod_340)./log(380/340);% aod1/aod2=(w1/w2)^(-a)
 
 aeronet_aod.time_array_utc=time_array_utc;
 aeronet_aod.date_utc=datetime(datestr(time_array_utc,'dd-mmm-yyyy'));
@@ -27,4 +31,6 @@ aeronet_aod.TimeInHour_utc=TimeInHour_utc;
 aeronet_aod.aod_1020=aod_1020;
 aeronet_aod.aod_340=aod_340;
 aeronet_aod.ae_1020_340=aod_ae_1020_340;
+aeronet_aod.aod_380=aod_380;
+aeronet_aod.ae_380_340=aod_ae_380_340;
 
