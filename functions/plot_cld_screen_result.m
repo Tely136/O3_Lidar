@@ -1,20 +1,21 @@
 function plot_cld_screen_result(DateTime_avg,TimeInHour_avg,hkm,pz2,d_Pz2,cldBaseZ,cldBaseZ_ind,cldTopZ,cldTopZ_ind)
 %% cloud screen test  result
 figure
-subplot(1,2,1)
-I=imagesc(TimeInHour_avg,hkm,pz2); hold on
+imagesc(TimeInHour_avg,hkm,pz2); hold on
 plot(TimeInHour_avg,cldBaseZ(1,:),'o');
 plot(TimeInHour_avg,cldTopZ(1,:),'^');
 ylim([0,12]);
 set(gca,'YDir','normal','FontSize',14,'ColorScale','log');colormap('jet');colorbar
-xlabel('Local Time (hour)');ylabel('Altitude (km)')
-title(['Ozone lidar smoothed Pz2(a.u.) at ',datestr(DateTime_avg(1),'yy/mm/dd')]);
+xlabel('Local Time (hour)');
+ylabel('Altitude (km)')
+title(strjoin(['Ozone lidar smoothed Pz^2(a.u.) at ',string(DateTime_avg(1),'yy/MM/dd')]));
 
-subplot(1,2,2)
-I=imagesc(TimeInHour_avg,hkm(1:end-1),d_Pz2);ylim([0,12]);
+figure
+imagesc(TimeInHour_avg,hkm(1:end-1),d_Pz2);ylim([0,12]);
 set(gca,'YDir','normal','FontSize',14,'ColorScale','log');colormap('jet');colorbar
-xlabel('Local Time (hour)');ylabel('Altitude (km)')
-title(['Ozone lidar smoothed P derivative (a.u.) at ',datestr(DateTime_avg(1),'yy/mm/dd')]);
+xlabel('Local Time (hour)');
+ylabel('Altitude (km)')
+title(strjoin(['Ozone lidar smoothed P derivative (a.u.) at ',string(DateTime_avg(1),'yy/MM/dd')]));
 
 %% Test--- plot each cloud profile
 % id_all = find(~isnan(cldBaseZ(1,:)));
