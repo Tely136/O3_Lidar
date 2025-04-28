@@ -8,9 +8,11 @@ function download_lidar_data(date, download_path)
     for i = 1:numel(folderNames)
         site = ['https://datadb.noaacrest.org/public/ORSL/Archived_Lidar/O3DIAL/', ...
             year(date), '/', string(date, 'uuuMMdd'), '/', folderNames{i}];
-        command = strjoin(['"', current_dir, '\wget" -r -q -np -nH --cut-dirs=5 -R "index.html*" ', ...
-            site, ' --no-check-certificate'], '');
-        [s, ~] = system(command);
+            command = strjoin(['"', current_dir, '\wget" -r -q -np -nH --cut-dirs=5 -R "index.html*" ', ...
+                site, ' --no-check-certificate'], '');
+
+            [s, ~] = system(command);
+            
         if s == 0
             success = true;
             break;
@@ -22,6 +24,5 @@ function download_lidar_data(date, download_path)
     end
     
     cd(current_dir);
-
 end
 
