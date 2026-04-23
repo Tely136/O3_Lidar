@@ -1,10 +1,8 @@
-function [data_glued, scaling_coeffs, corrcoefs, valid] = glue_an_pc(an_data,pc_data,min_toggle,max_toggle,SNR,SNR_min)
-
+function [data_glued, scaling_coeffs, corrcoefs, valid] = glue_an_pc(an_data,pc_data,min_toggle,max_toggle)
     toggle_mask = pc_data > min_toggle & pc_data < max_toggle;
-    SNR_mask = SNR > SNR_min;
-    
+
     pc_glue_valid = false(size(pc_data));
-    pc_glue_valid(toggle_mask & SNR_mask) = true;
+    pc_glue_valid(toggle_mask) = true;
     
     data_glued = pc_data;
     scaling_coeffs = NaN(size(pc_data,2),2);

@@ -1,9 +1,9 @@
-function output = O3_quicklook(data,times,configs,params)
+function output = O3_quicklook(data,times,params)
     % TODO: put wavelengths in configs and read it from there (maybe)
     hkm = data.hkm;
 
-    pre_output_on = preprocess(data.an_on,data.pc_on,hkm,times,configs,params);
-    pre_output_off = preprocess(data.an_off,data.pc_off,hkm,times,configs,params);
+    pre_output_on = preprocess(data.an_on,data.pc_on,times,params);
+    pre_output_off = preprocess(data.an_off,data.pc_off,times,params);
 
     % Determine filter widths and load filter coefficients
     M1 = params.M1;
@@ -73,50 +73,39 @@ function output = O3_quicklook(data,times,configs,params)
     output.C = C;
 end
 
-function SNR = SNR_PC(P,B,Neff)
-    SNR = NaN(size(P));
-
-    for i = 1:size(P,2)
-        SNR(:,i) = sqrt(Neff(i)) * P(:,i) ./ sqrt(P(:,i) + B(:,i));
-    end
-end
-
-function [output] = preprocess(an,pc,hkm,times,configs,params)
+function [output] = preprocess(an,pc,times,params)
     min_avg = params.min_avg;
     bg_bins = params.bg_bins;
     td = params.td;
     min_toggle = params.min_toggle;
     max_toggle = params.max_toggle;
 
-    % Time average 
-    [an_avg,times_avg,times_counts] = retime_avg(an,times,min_avg);
-    pc_avg = retime_avg(pc,times,min_avg);
-
     % Remove data before gate
-    [an_avg,pc_avg] = rm_gate(an_avg,pc_avg);
+    [an,pc_avg] = rm_gate(an,pc);
 
     % Dead-time correction of PC data
-    pc_dt = correct_deadtime(pc_avg,td);
+    pc_dt = correct_deadtime(pc,td);
 
     % Remove background
-    [an_bg_rem,an_bg,an_b_coeff] = remove_background(an_avg,hkm,bg_bins,configs,"simple");
-    [pc_dt_bg_rem,pc_bg,pc_b_coeff] = remove_background(pc_dt,hkm,bg_bins,configs,"simple");  
+    [an_bg_rem,an_bg] = remove_background(an,bg_bins,"simple");
+    [~,pc_bg] = remove_background(pc,bg_bins,"simple");  
+    pc_dt_bg_rem = pc_dt - pc_bg;
 
-    % TODO: fix the hardcoded 1200
-    SNR = SNR_PC(pc_dt_bg_rem,pc_bg,times_counts.*1200);
+    an_bg_rem(an_bg_rem<0 | pc_dt_bg_rem<0) = NaN;
+    pc_dt_bg_rem(an_bg_rem<0 | pc_dt_bg_rem<0) = NaN;
 
     % Glue analog and PC data for each TR
-    [glued, coeffs, corrcoefs, valid] = glue_an_pc(an_bg_rem,pc_dt_bg_rem,min_toggle,max_toggle,SNR,50); 
+    [glued, coeffs, corrcoefs, valid] = glue_an_pc(an_bg_rem,pc_dt_bg_rem,min_toggle,max_toggle); 
 
-    % TODO: add function to remove data before gate, can set data before
-    % max of signal to NaN
+    % Time average
+    [glued,times_avg,times_counts] = retime_avg(glued,times,min_avg);
 
     output = struct;
 
     output.an = an;
     output.pc = pc;
 
-    output.an_avg = an_avg;
+    output.an_avg = an;
     output.pc_avg = pc_avg;
 
     output.pc_dt = pc_dt;
@@ -126,8 +115,6 @@ function [output] = preprocess(an,pc,hkm,times,configs,params)
 
     output.an_bg = an_bg;
     output.pc_bg = pc_bg;
-    output.an_bg_coeff = an_b_coeff;
-    output.pc_bg_coeff = pc_b_coeff;
 
     output.glued = glued;
 
@@ -137,8 +124,6 @@ function [output] = preprocess(an,pc,hkm,times,configs,params)
 
     output.times_avg = times_avg;
     output.times_counts = times_counts;
-
-    output.SNR = SNR;
 end
 
 function [data_avg,times_avg,times_avg_counts] = retime_avg(data,times,min_avg)
@@ -152,40 +137,12 @@ function [data_avg,times_avg,times_avg_counts] = retime_avg(data,times,min_avg)
     times_avg_counts = tt_count.Var1(:,1);
 end
 
-function [data,B,b] = remove_background(data,hkm,bg_bins,configs,mode)
-    n_avg = size(data,2);
-    B = NaN(size(data));
-    
-    switch mode
-        case "simple"
-            b = NaN(1,size(data,2));
-            for i = 1:n_avg
-                temp_bins = configs(i).bins(1);
-                bg_idx = temp_bins-bg_bins+1:temp_bins;
-            
-                temp_b = mean(data(bg_idx,i),'omitmissing');
-                data(:,i) = data(:,i) - temp_b;
-                b(i) = temp_b;
-                B(:,i) = temp_b;
-            end
-            data(data<0) = NaN;
+function [data_bg_rem,B] = remove_background(data,bg_bins,mode)
+    B = bkg(data,bg_bins,mode);
 
-        case "linear"
-            % TODO: add hkm, subtract background from data
-            b = NaN(2,size(data,2));
-            for i = 1:n_avg
-                temp_bins = configs(i).bins(1);
-                bg_idx = temp_bins-bg_bins+1:temp_bins;
+    [r,~] = size(data);
 
-                mdl = fitlm(hkm(bg_idx),data(bg_idx,i));
-                b(:,i) = mdl.Coefficients.Estimate;
-
-                temp_B = (b(1,i) + b(2,i).*data(:,i));
-                B(:,i) = temp_B;
-                data(:,i) = data(:,i) - temp_B;
-            end
-            data(data<0) = NaN;
-    end
+    data_bg_rem = data - repmat(B,r,1);
 end
 
 function data = correct_deadtime(data,rd)
@@ -218,4 +175,14 @@ function [an_out,pc_out] = rm_gate(an,pc)
     end
     an_out = an;
     pc_out = pc;
+end
+
+function B = bkg(data,bins,mode)
+    switch mode
+        case "simple"
+            B = mean(data(bins,:),1);
+
+        case "linear"
+            % will be added
+    end
 end
