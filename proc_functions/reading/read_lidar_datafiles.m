@@ -1,4 +1,5 @@
-function [data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix)
+function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix)
+% add argument to this to only return FDS, and not the read data
     arguments
         folder_path string
         file_format string
@@ -21,6 +22,11 @@ function [data,times,configs] = read_lidar_datafiles(folder_path,file_format,pre
 
         case "txt"
             fds = fileDatastore(folder_path, 'ReadFcn', @readLicelASCII, 'FileExtensions','.txt');
+
+
+        case "list"
+            filename_list = folder_path;
+            fds = fileDatastore(filename_list,'ReadFcn',@readLicelBinary);
 
     end
     
@@ -50,6 +56,15 @@ function [data,times,configs] = read_lidar_datafiles(folder_path,file_format,pre
         configs(i)       = Data.config;
         for j = 1:n_channels
             data(1:Data.config.bins(j),i,j,:) = Data.data(:,:,j,:);
+        end
+    end
+
+    scaled_data = NaN(size(data));
+    for i = 1:num_files
+        temp_config = configs(i);
+        for j = 1:size(data,3)
+            scaled_data(:,i,j,1) = scale_binary_analog(data(:,i,j,1),temp_config.range(j),temp_config.adcbits(j),temp_config.shots(j));
+            scaled_data(:,i,j,2) = scale_binary_pc(data(:,i,j,2),temp_config.binwidth(j),temp_config.shots(j));
         end
     end
 end

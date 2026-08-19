@@ -5,26 +5,7 @@ function output = O3_quicklook(data,times,params)
     pre_output_on = preprocess(data.an_on,data.pc_on,times,params);
     pre_output_off = preprocess(data.an_off,data.pc_off,times,params);
 
-    % Determine filter widths and load filter coefficients
-    M1 = params.M1;
-    M2 = params.M2;
-    h1 = params.h1;
-    h2 = params.h2;
-    
-    fl = gen_framelength(M1,M2,h1,h2,hkm);
-    
-    % TODO: don't load filters here, make altitude dependent filter list
-    % previously and input to processsing function
-    sg = load('sg_filters.mat');
-    sg_diff = sg.sg_diff;
-
-    C = cell(1,length(fl));
-    for k = 1:length(fl)
-        m = fl(k);
-        N = (m-1)/2;
-
-        C{k} = sg_diff{N};
-    end
+    C = filts(params,hkm);
     
     % Calculate S
     r = log(pre_output_off.glued./pre_output_on.glued);
@@ -184,5 +165,29 @@ function B = bkg(data,bins,mode)
 
         case "linear"
             % will be added
+    end
+end
+
+
+function C = filts(params,hkm)
+    % Determine filter widths and load filter coefficients
+    M1 = params.M1;
+    M2 = params.M2;
+    h1 = params.h1;
+    h2 = params.h2;
+    
+    fl = gen_framelength(M1,M2,h1,h2,hkm);
+    
+    % TODO: don't load filters here, make altitude dependent filter list
+    % previously and input to processsing function
+    sg = load('sg_filters.mat');
+    sg_diff = sg.sg_diff;
+
+    C = cell(1,length(fl));
+    for k = 1:length(fl)
+        m = fl(k);
+        N = (m-1)/2;
+
+        C{k} = sg_diff{N};
     end
 end
