@@ -8,7 +8,7 @@ function output = O3_quicklook(data,times,params)
     C = filts(params,hkm);
     
     % Calculate S
-    r = log(pre_output_off.glued./pre_output_on.glued);
+    r = log(pre_output_off.glued_avg./pre_output_on.glued_avg);
     S = smooth_derivative(r,C,params.dz);
     n_avg = size(S,2);
     
@@ -62,7 +62,7 @@ function [output] = preprocess(an,pc,times,params)
     max_toggle = params.max_toggle;
 
     % Remove data before gate
-    [an,pc_avg] = rm_gate(an,pc);
+    [an,pc] = rm_gate(an,pc);
 
     % Dead-time correction of PC data
     pc_dt = correct_deadtime(pc,td);
@@ -79,14 +79,16 @@ function [output] = preprocess(an,pc,times,params)
     [glued, coeffs, corrcoefs, valid] = glue_an_pc(an_bg_rem,pc_dt_bg_rem,min_toggle,max_toggle); 
 
     % Time average
-    [glued,times_avg,times_counts] = retime_avg(glued,times,min_avg);
+    [glued_avg,times_avg,times_counts] = retime_avg(glued,times,min_avg);
+    an_avg = retime_avg(an,times,min_avg);
+    pc_avg = retime_avg(pc,times,min_avg);
 
     output = struct;
 
     output.an = an;
     output.pc = pc;
 
-    output.an_avg = an;
+    output.an_avg = an_avg;
     output.pc_avg = pc_avg;
 
     output.pc_dt = pc_dt;
@@ -98,6 +100,7 @@ function [output] = preprocess(an,pc,times,params)
     output.pc_bg = pc_bg;
 
     output.glued = glued;
+    output.glued_avg = glued_avg;
 
     output.glued_coeffs = coeffs;
     output.glued_valid = valid;
