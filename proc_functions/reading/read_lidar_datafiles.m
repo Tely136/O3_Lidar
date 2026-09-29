@@ -1,9 +1,10 @@
-function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix)
-% add argument to this to only return FDS, and not the read data
+function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix,start_time,end_time)
     arguments
         folder_path string
         file_format string
         prefix string = "ol"
+        start_time datetime = datetime(2000,1,1);
+        end_time datetime = datetime(2100,1,1);
     end
 
     % create FDS of ozone lidar datafiles
@@ -13,21 +14,23 @@ function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_for
 
         case "bin"
             dir_info = dir(folder_path);
-            filenames = string({dir_info.name});
-            ol_ids = ~[dir_info().isdir] & startsWith(filenames,prefix);
+            files = dir_info(~[dir_info.isdir]);
+            filenames = string({files.name});
+
+            filename_dates = parse_filename(filenames);
             
-            ol_files = dir_info(ol_ids);
+            ol_ids = startsWith(filenames,prefix) & filename_dates >= start_time & filename_dates <= end_time;
+            
+            ol_files = files(ol_ids);
             ol_paths = fullfile(string({ol_files.folder}), string({ol_files.name}));
             fds = fileDatastore(ol_paths,'ReadFcn',@readLicelBinary);
 
         case "txt"
             fds = fileDatastore(folder_path, 'ReadFcn', @readLicelASCII, 'FileExtensions','.txt');
 
-
         case "list"
             filename_list = folder_path;
             fds = fileDatastore(filename_list,'ReadFcn',@readLicelBinary);
-
     end
     
     % preview data within fds
