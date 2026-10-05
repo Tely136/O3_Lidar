@@ -1,18 +1,18 @@
-% Uncertinty in Ozone number density due to X propapgated throguh photon counts, with no covariance terms
+% Uncertainty in Ozone number density due to X propagated through photon counts, with no covariance terms
 % From Thierry's Part 2 paper
 %   Equations 32,33,36,37,43,44 in paper
-function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsimga,dz,cp)
+function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp)
     arguments
         Pon         % signal counts in on channel
         Poff        % signal counts in off channel
         u_Pon_X     % uncertainty in photon counts due to source X in on channel
         u_Poff_X    % uncertainty in photon counts due to source X in off channel
-        dsimga      % differential absorption cross section
+        dsigma      % differential absorption cross section
         dz          % bin width
         cp          % height dependent filter coefficients
     end
 
-    coeff = 1 ./ (abs(dsimga) * dz);
+    coeff = 1 ./ (abs(dsigma) * dz);
 
     % Altitude dimension should be 1st
     nk = size(Pon,1);
@@ -29,7 +29,7 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsimga,dz,cp)
             if i-N >= 1 && i+N <= nk
                 idx = i-N:i+N;
                 A = ((u_Pon_X(idx)./Pon(idx).^2 + (u_Poff_X(idx)./Poff(idx).^2)));
-                u(i,prof) = sqrt(c_temp(:,2)' * A);
+                u(i,prof) = sqrt(c_temp(:,2).^2' * A);
             end
         end
     end

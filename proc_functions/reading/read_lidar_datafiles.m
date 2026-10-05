@@ -1,4 +1,4 @@
-function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix,start_time,end_time)
+function [an_data,pc_data,times,configs] = read_lidar_datafiles(folder_path,file_format,prefix,start_time,end_time)
     arguments
         folder_path string
         file_format string
@@ -7,7 +7,7 @@ function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_for
         end_time datetime = datetime(2100,1,1);
     end
 
-    % create FDS of ozone lidar datafiles
+    % create FDS of ozone lidar data files
     switch file_format
         case "mat"
             fds = fileDatastore(folder_path, 'ReadFcn', @readTEMAT, 'FileExtensions','.mat');
@@ -40,11 +40,13 @@ function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_for
     fullFileNames = fds.Files;
     num_files = length(fullFileNames);
     n_channels = size(preview_data.data,3);
-    n_datasets = size(preview_data.data,4);
+    % n_datasets = size(preview_data.data,4);
 
     % initialize raw data array
-    data = NaN(2^14,num_files,n_channels,n_datasets);
-    
+    exp = 10;
+    an_data = NaN(2^exp,num_files,n_channels);
+    pc_data = NaN(2^exp,num_files,n_channels);
+
     % initialize array for times
     times = NaT(num_files,3);
     
@@ -58,16 +60,21 @@ function [scaled_data,times,configs] = read_lidar_datafiles(folder_path,file_for
         times(i,:)       = Data.time;
         configs(i)       = Data.config;
         for j = 1:n_channels
-            data(1:Data.config.bins(j),i,j,:) = Data.data(:,:,j,:);
+            % raw_data(1:Data.config.bins(j),i,j,:) = Data.data(:,:,j,:);
+            temp = Data.data(:,:,j,:);
+
+            an_data(1:Data.config.bins(j),i,j) = temp(:,:,:,1);
+            pc_data(1:Data.config.bins(j),i,j) = temp(:,:,:,2);
         end
     end
 
-    scaled_data = NaN(size(data));
-    for i = 1:num_files
-        temp_config = configs(i);
-        for j = 1:size(data,3)
-            scaled_data(:,i,j,1) = scale_binary_analog(data(:,i,j,1),temp_config.range(j),temp_config.adcbits(j),temp_config.shots(j));
-            scaled_data(:,i,j,2) = scale_binary_pc(data(:,i,j,2),temp_config.binwidth(j),temp_config.shots(j));
-        end
-    end
+    % % scale raw data to physical units
+    % scaled_data = NaN(size(raw_data));
+    % for i = 1:num_files
+    %     temp_config = configs(i);
+    %     for j = 1:size(raw_data,3)
+    %         scaled_data(:,i,j,1) = scale_binary_analog(raw_data(:,i,j,1),temp_config.range(j),temp_config.adcbits(j),temp_config.shots(j));
+    %         scaled_data(:,i,j,2) = scale_binary_pc(raw_data(:,i,j,2),temp_config.binwidth(j),temp_config.shots(j));
+    %     end
+    % end
 end
