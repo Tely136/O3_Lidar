@@ -60,21 +60,10 @@ function [an_data,pc_data,times,configs] = read_lidar_datafiles(folder_path,file
         times(i,:)       = Data.time;
         configs(i)       = Data.config;
         for j = 1:n_channels
-            % raw_data(1:Data.config.bins(j),i,j,:) = Data.data(:,:,j,:);
             temp = Data.data(:,:,j,:);
 
             an_data(1:Data.config.bins(j),i,j) = temp(:,:,:,1);
             pc_data(1:Data.config.bins(j),i,j) = temp(:,:,:,2);
         end
     end
-
-    % % scale raw data to physical units
-    % scaled_data = NaN(size(raw_data));
-    % for i = 1:num_files
-    %     temp_config = configs(i);
-    %     for j = 1:size(raw_data,3)
-    %         scaled_data(:,i,j,1) = scale_binary_analog(raw_data(:,i,j,1),temp_config.range(j),temp_config.adcbits(j),temp_config.shots(j));
-    %         scaled_data(:,i,j,2) = scale_binary_pc(raw_data(:,i,j,2),temp_config.binwidth(j),temp_config.shots(j));
-    %     end
-    % end
 end

@@ -1,4 +1,17 @@
 function ND_plot(x,y,z,c_lim,y_lim,x_label,y_label,c_label,title_str,fs)
+    arguments
+        x 
+        y 
+        z 
+        c_lim = [0 120]
+        y_lim = [0 10]
+        x_label = "Time"
+        y_label = "Altitude"
+        c_label = "Ozone"
+        title_str = ""
+        fs = 12
+    end
+
     figure;
     I = imagesc(x, y, z);
     cbar_tolnet=colorbar_tolnet_func;
