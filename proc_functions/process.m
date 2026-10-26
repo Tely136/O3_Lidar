@@ -1,9 +1,9 @@
 function out = process(input_path,output_path)
-    % DIAL Processing Functions
-    addpath(genpath("..\O3_Lidar\proc_functions"));
-    
-    % Signal Analysis and Modeling Functions
-    addpath(genpath("..\signal_analysis\functions"));
+    % Resolve dependencies from this file, independent of MATLAB's cwd.
+    repo_dir = fileparts(fileparts(mfilename('fullpath')));
+    model_dir = fullfile(fileparts(repo_dir),'signal_analysis');
+    addpath(genpath(fullfile(repo_dir,'proc_functions')));
+    addpath(genpath(fullfile(model_dir,'functions')));
 
     %% Signal preparation
     % parameters to be moved into config file
@@ -36,7 +36,7 @@ function out = process(input_path,output_path)
     z_km = z.*1e-3;
 
     % Average and calculate background from binary analog and photon counting data
-    [an_bin_avg, pc_P_avg,times_avg,an_B_avg,pc_B_avg] = preprocess(an_R,pc_R,times,dz,n_avg,n_shots,fd);
+    [an_bin_avg, pc_P_avg,times_avg,an_B_avg,pc_B_avg,pc_uB,pc_rb] = preprocess(an_R,pc_R,times,dz,n_avg,n_shots,fd);
     an_bin_bg = an_bin_avg - an_B_avg;
     pc_P_bg = pc_P_avg - pc_B_avg;
 
@@ -102,7 +102,7 @@ function out = process(input_path,output_path)
     Ta = atmosisa(z_grid);
 
     % Differential ozone absorption cross section as function of temperature
-    BDM = load("cross_sections\ozone\bdm\bdm_287_299.mat");
+    BDM = load(fullfile(model_dir,'cross_sections','ozone','bdm','bdm_287_299.mat'));
     BDM_t = BDM.BDM_t;
     sigma_o3_on = BDM.BDM_c287 .* 1e-4;
     sigma_o3_off = BDM.BDM_c299 .* 1e-4;
@@ -155,13 +155,33 @@ function out = process(input_path,output_path)
     q_o3_pc_merged = (N_o3_pc_merged ./ Na) * 1e9;
     q_o3_mg_merged = (N_o3_mg_merged ./ Na) * 1e9;
 
-    % Uncertainty
-    % uTau = 0;
-    % uNO3_fr = uncertainty(1,2,pc_P,R_avg,uB,rb,C_fr,dsigma_o3,uTau,dz,1200);
-    % uNO3_nr = uncertainty(3,4,pc_P,R_avg,uB,rb,C_fr,dsigma_o3,uTau,dz,1200);
-    % 
-    % uqO3_fr = uNO3_fr ./ Na .* 1e9;
-    % uqO3_nr = uNO3_nr ./ Na .* 1e9;
+    % Photon-count-only uncertainty subtotal (literal paper equations).
+    % Configure dead-time SD in SECONDS. Zero explicitly disables SAT;
+    % this is NOT a complete Eq.99/100 atmospheric uncertainty budget.
+    uTau = 0;
+    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(...
+        pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,1,2,C_fr,dsigma_o3,...
+        dz,n_avg,n_shots,fd,uTau);
+    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(...
+        pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,3,4,C_nr,dsigma_o3,...
+        dz,n_avg,n_shots,fd,uTau);
+
+    % merge_profiles returns HIGH-range weights; the paper uses LOW weights.
+    wLow = ones(n_bins,n_prof_avg);
+    merge_ids = find(z_km > start_merge & z_km < end_merge);
+    wLow(merge_ids,:) = repmat(1-w_o3_pc(:),1,n_prof_avg);
+    wLow(z_km >= end_merge,:) = 0;
+    % Match the retrieval's omitmissing fallback inside the transition.
+    wl = wLow(merge_ids,:);
+    lo = N_o3_nr_pc(merge_ids,:); hi = N_o3_fr_pc(merge_ids,:);
+    wl(isnan(lo) & ~isnan(hi)) = 0;
+    wl(~isnan(lo) & isnan(hi)) = 1;
+    wLow(merge_ids,:) = wl;
+    [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(...
+        pc_uncertainty_nr,pc_uncertainty_fr,wLow);
+    uqO3_fr = uNO3_fr ./ Na .* 1e9;
+    uqO3_nr = uNO3_nr ./ Na .* 1e9;
+    uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
 
     out = struct();
 
@@ -262,36 +282,21 @@ function out = process(input_path,output_path)
     out.sigma_o3_off = sigma_o3_off_t;
     out.dsigma_o3 = dsigma_o3;
 
-    % out.uNO3_fr = uNO3_fr;
-    % out.uNO3_nr = uNO3_nr;
-    % 
-    % out.uqO3_fr = uqO3_fr;
-    % out.uqO3_nr = uqO3_nr;
+    % PC uncertainty is for PC ozone ONLY, not analog/AN-PC merged ozone.
+    out.uNO3_fr = uNO3_fr;
+    out.uNO3_nr = uNO3_nr;
+    out.uNO3_pc_merged = uNO3_pc_merged;
+    out.uqO3_fr = uqO3_fr;
+    out.uqO3_nr = uqO3_nr;
+    out.uqO3_pc_merged = uqO3_pc_merged;
+    out.pc_uncertainty_fr = pc_uncertainty_fr;
+    out.pc_uncertainty_nr = pc_uncertainty_nr;
+    out.pc_uncertainty_merged = pc_uncertainty_merged;
+    out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT'}},...
+        'complete_atmospheric_budget',false,'uTau_seconds',uTau,...
+        'channel_correlation','independent','formula_mode','literal_paper',...
+        'cross_section_convention','single_path');
 
     save(output_path, '-struct', 'out')
-end
-
-function u = uncertainty(id_on,id_off,P,R,uB,rb,C,dsigma_o3,uTau,dz,L)
-    P_on = P(:,:,id_on);
-    P_off = P(:,:,id_off);
-
-    R_on = R(:,:,id_on);
-    R_off = R(:,:,id_off);
-
-    uB_on = uB(:,:,id_on);
-    uB_off = uB(:,:,id_off);
-
-    rb_on = rb(:,id_on);
-    rb_off = rb(:,id_off);
-
-    n_bins = size(P_on,1);
-    n_prof = size(P_on,2);
-
-    z = (1:n_bins).*dz;
-
-    u = NaN(n_bins,n_prof);
-    for i = 1:n_prof
-        u(:,i) = uNO3(P_on(:,i),P_off(:,i),R_on(:,i),R_off(:,i),dz,L,uTau,dsigma_o3(:,i),C,uB_on(:,i),uB_off(:,i),rb_on(i),rb_off(i),z);
-    end
 end
 
