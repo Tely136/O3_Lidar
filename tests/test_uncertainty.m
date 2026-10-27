@@ -154,6 +154,27 @@ function testInvalidInputs(t)
     verifyError(t,@()uNO3_P_X_NC(P,P,-1,1,2,4,C),'O3:NegativeUncertainty');
     verifyError(t,@()uNO3_P_X_NC(P,P,1,1,2,4,C(1:2)),'O3:FilterSize');
 end
+function testCorrelatedRayleighCrossSection(t)
+    Na = [1000 2000; 3000 4000];
+    dS_O3 = [2 4; 5 8];
+
+    verifyEqual(t,uNO3_dS_M_S(Na,dS_O3,0.3,0.1),Na .* 0.2 ./ dS_O3,'RelTol',1e-12);
+    verifyEqual(t,uNO3_dS_M_S(Na,dS_O3,0.3,0.3),zeros(2));
+
+    % A common 2% scale error gives 2% of the Rayleigh correction.
+    correction = Na .* (5 - 3) ./ dS_O3;
+    verifyEqual(t,uNO3_dS_M_S(Na,dS_O3,0.02*5,0.02*3),0.02 .* correction,'RelTol',1e-12);
+end
+function testOzoneCrossSectionRelativeFloor(t)
+    N = [100 200; 300 400];
+    sigma_on = [5 6; 7 8];
+    sigma_off = ones(2);
+    differential = sigma_on - sigma_off;
+    expected = N .* 0.02 .* sqrt(sigma_on.^2 + sigma_off.^2) ./ differential;
+
+    verifyEqual(t,uNO3_dS_O3_R(N,differential,0.02.*sigma_on,0.02.*sigma_off),expected,'RelTol',1e-12);
+    verifyEqual(t,uNO3_dS_O3_R(N,differential,zeros(2),zeros(2)),zeros(2));
+end
 function [P,C]=fixture()
     P=repmat([100 200],7,1);
     C=repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,7);

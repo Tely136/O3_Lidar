@@ -11,11 +11,18 @@ function out = process(input_path,output_path)
     prefix = "ol";
     n_avg = 30;
     n_shots = 1200;
-    fd = 270; % fix the naming convention around this
+    fd = 270; % inverse dead time (MHz)
+    tau = 1 / (fd * 1e6); % seconds
+    uTau_rel = 0.10; % provisional standard uncertainty until calibrated
+    uTau = uTau_rel * tau;
     start_merge = 1.5;
     end_merge = 2;
     min_toggle = 3;
     max_toggle = 60;
+
+    % Relative standard uncertainties; working estimates from Table 3.
+    u_sigma_o3_rel = 0.02;
+    u_sigma_m_rel = 0.02;
 
     % Bin width
     dz = 3.75;
@@ -29,7 +36,6 @@ function out = process(input_path,output_path)
     n_prof = size(an_R,2);
 
     n_prof_avg = floor(n_prof / n_avg);
-
 
     % Alt vector
     z = (1:n_bins) .* dz;
@@ -155,30 +161,44 @@ function out = process(input_path,output_path)
     q_o3_pc_merged = (N_o3_pc_merged ./ Na) * 1e9;
     q_o3_mg_merged = (N_o3_mg_merged ./ Na) * 1e9;
 
-    % Photon-count-only uncertainty subtotal (literal paper equations).
-    % Configure dead-time SD in SECONDS. Zero explicitly disables SAT;
-    % this is NOT a complete Eq.99/100 atmospheric uncertainty budget.
-    uTau = 0;
-    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(...
-        pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,1,2,C_fr,dsigma_o3,...
-        dz,n_avg,n_shots,fd,uTau);
-    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(...
-        pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,3,4,C_nr,dsigma_o3,...
-        dz,n_avg,n_shots,fd,uTau);
+    % Photon-count uncertainty budget (literal paper equations).
+    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,1,2,C_fr,dsigma_o3,dz,n_avg,n_shots,fd,uTau);
+    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,3,4,C_nr,dsigma_o3,dz,n_avg,n_shots,fd,uTau);
 
     % merge_profiles returns HIGH-range weights; the paper uses LOW weights.
     wLow = ones(n_bins,n_prof_avg);
     merge_ids = find(z_km > start_merge & z_km < end_merge);
     wLow(merge_ids,:) = repmat(1-w_o3_pc(:),1,n_prof_avg);
     wLow(z_km >= end_merge,:) = 0;
+
     % Match the retrieval's omitmissing fallback inside the transition.
     wl = wLow(merge_ids,:);
     lo = N_o3_nr_pc(merge_ids,:); hi = N_o3_fr_pc(merge_ids,:);
     wl(isnan(lo) & ~isnan(hi)) = 0;
     wl(~isnan(lo) & isnan(hi)) = 1;
     wLow(merge_ids,:) = wl;
-    [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(...
-        pc_uncertainty_nr,pc_uncertainty_fr,wLow);
+    [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(pc_uncertainty_nr,pc_uncertainty_fr,wLow);
+
+    % Ozone cross sections: independent wavelength errors (Eq. 47).
+    u_sigma_o3_on = u_sigma_o3_rel .* sigma_o3_on_t;
+    u_sigma_o3_off = u_sigma_o3_rel .* sigma_o3_off_t;
+    pc_uncertainty_fr.O3 = uNO3_dS_O3_R(N_o3_fr_pc,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
+    pc_uncertainty_nr.O3 = uNO3_dS_O3_R(N_o3_nr_pc,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
+    pc_uncertainty_merged.O3 = uNO3_dS_O3_R(N_o3_pc_merged,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
+
+    % Rayleigh cross sections: one correlated analytical model (Eq. 55).
+    u_sigma_m_on = u_sigma_m_rel .* sigma_m_on;
+    u_sigma_m_off = u_sigma_m_rel .* sigma_m_off;
+    u_rayleigh = uNO3_dS_M_S(Na,dsigma_o3,u_sigma_m_on,u_sigma_m_off);
+    pc_uncertainty_fr.RAYLEIGH = u_rayleigh;
+    pc_uncertainty_nr.RAYLEIGH = u_rayleigh;
+    pc_uncertainty_merged.RAYLEIGH = u_rayleigh;
+
+    % Add atmospheric components once, after merging the signal components.
+    uNO3_fr = sqrt(uNO3_fr.^2 + pc_uncertainty_fr.O3.^2 + u_rayleigh.^2);
+    uNO3_nr = sqrt(uNO3_nr.^2 + pc_uncertainty_nr.O3.^2 + u_rayleigh.^2);
+    uNO3_pc_merged = sqrt(uNO3_pc_merged.^2 + pc_uncertainty_merged.O3.^2 + u_rayleigh.^2);
+
     uqO3_fr = uNO3_fr ./ Na .* 1e9;
     uqO3_nr = uNO3_nr ./ Na .* 1e9;
     uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
@@ -281,6 +301,9 @@ function out = process(input_path,output_path)
     out.sigma_o3_on = sigma_o3_on_t;
     out.sigma_o3_off = sigma_o3_off_t;
     out.dsigma_o3 = dsigma_o3;
+    out.sigma_m_on = sigma_m_on;
+    out.sigma_m_off = sigma_m_off;
+    out.dsigma_m = dsigma_m;
 
     % PC uncertainty is for PC ozone ONLY, not analog/AN-PC merged ozone.
     out.uNO3_fr = uNO3_fr;
@@ -292,10 +315,14 @@ function out = process(input_path,output_path)
     out.pc_uncertainty_fr = pc_uncertainty_fr;
     out.pc_uncertainty_nr = pc_uncertainty_nr;
     out.pc_uncertainty_merged = pc_uncertainty_merged;
-    out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT'}},...
-        'complete_atmospheric_budget',false,'uTau_seconds',uTau,...
+    out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT','O3','RAYLEIGH'}},...
+        'complete_atmospheric_budget',false,'tau_seconds',tau,'uTau_seconds',uTau,...
+        'uTau_relative',uTau_rel,'dead_time_uncertainty_source','provisional engineering estimate',...
         'channel_correlation','independent','formula_mode','literal_paper',...
-        'cross_section_convention','single_path');
+        'cross_section_convention','single_path',...
+        'ozone_cross_section_correlation','independent','rayleigh_cross_section_correlation','full',...
+        'u_sigma_o3_relative',u_sigma_o3_rel,'u_sigma_m_relative',u_sigma_m_rel,...
+        'cross_section_uncertainty_source','Leblanc 2016 Table 3 working estimates');
 
     save(output_path, '-struct', 'out')
 end

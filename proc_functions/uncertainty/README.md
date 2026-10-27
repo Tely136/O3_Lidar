@@ -33,6 +33,7 @@ This does not implement the entire uncertainty budget in the paper.
 | uNO3_P_X_NC | 32,36,43 | Fixed missing squared SDs, factor 2, profile indexing; explicit vertical correlation mode |
 | uNO3_P_X_FC | 38,45 | Implemented previous empty stub, preserving printed absolute-value placement |
 | uNO3_dS_O3_R | 47 | Corrected factor 2 for single-path convention; elementwise arrays; printed ozone-density sign retained |
+| uNO3_dS_M_S | 55 | Correlated analytical Rayleigh model; single-path ozone denominator |
 | uNO3_dS_M_R | 57 | AIR density and OZONE differential required; former Rayleigh denominator was wrong |
 | uNO3_Na1 | 81 | Formula correct; elementwise oxygen term, assumptions documented |
 | uNO3_Na2_NC | 86 | Formula correct; elementwise oxygen term, independent pressure/temperature documented |
@@ -83,12 +84,51 @@ uses count-domain signals, and saves FR/NR component profiles and merged PC
 uncertainty. Its old call used undefined pc_P/R_avg/uB/rb variables.
 `merge_pc_uncertainty` applies Eq.95 to DET and Eq.97 to BKG/SAT before
 combining; the integration follows retrieval weights and omitmissing fallback.
-The original `uTau=0` setting remains: SAT is deliberately disabled until a
-manufacturer/calibration standard uncertainty is supplied. No values for
-cross-section, temperature, pressure or interfering-gas uncertainty have been
-invented. These functions exist as building blocks but are not included in
-the PC subtotal. Atmospheric uncertainty components must be merged unchanged
-(Eqs.93-94) and added separately when extending this to a complete budget.
+Dead-time uncertainty is enabled with a provisional **10% relative standard
+uncertainty**: `tau = 1/(fd*1e6)` and `uTau = 0.10*tau`. With `fd=270 MHz`,
+this means `tau=3.704 ns` and `uTau=0.370 ns`. The choice is an engineering
+assumption, not a measured uncertainty or manufacturer tolerance. The nominal
+dead time used to correct the signals is unchanged. The saved metadata records
+both the nominal value and assumed relative/absolute standard uncertainty.
+The same assumed magnitude is currently used for each channel; ON/OFF errors
+remain independent and each channel's dead time remains correlated in time.
+
+Licel's [PMT manual, section 6.6](https://licel.com/manuals/pmtmanual.pdf)
+quotes approximately 3.7 ns / 270 MHz for older transient recorders and
+3.06 ns / 326 MHz for a TR40-16bit-3U at specified settings. These nominal
+values are not uncertainty estimates. Confirm the actual recorder and settings
+before treating 270 MHz as calibrated.
+
+To estimate the effective dead time, align simultaneous analog and RAW PC
+profiles, select a region with linear analog response and moderate PC rates,
+and fit `r = q/(1+tau*q)`, with `q=a*V+b`, in Hz. Fit gain/offset and tau
+together; do not use already corrected or glued PC data as the reference.
+Repeat per channel at the operational HV/discriminator settings. Estimate
+standard uncertainty from the fit and repeatability, and check sensitivity to
+the fitting interval and signal alignment. See Licel's
+[analog/PC note](https://licel.com/manuals/analogpc.pdf), section 6.5.
+A larger uTau does not make heavily saturated or model-invalid data reliable.
+
+The processing budget also includes `O3` (Eq.47) and `RAYLEIGH` (Eq.55).
+Both relative standard uncertainty settings are 0.02 in `process.m`, using
+Table 3 as a working estimate, not as a calibration of this instrument.
+Ozone wavelength errors are treated as independent random components, as in
+Table 3's ozone example. Rayleigh wavelength errors are fully correlated
+because both cross sections come from one analytical model. A common 2%
+Rayleigh scale uncertainty therefore gives 2% of the Rayleigh correction,
+not the quadrature of two independent wavelength errors.
+
+Ozone uncertainty is evaluated using each final FR, NR and merged ozone
+profile. Rayleigh uncertainty is the same atmospheric profile for all ranges.
+Both are added once after merging the DET/BKG/SAT components, without an
+artificial reduction from independent-range averaging (Eqs.93-94).
+The saved metadata records the input fractions and correlation assumptions.
+The live profile plot shows these two additional components and the updated
+subtotal; rerun processing to populate the fields in older saved files.
+
+Air-density/temperature/pressure and interfering-gas components remain
+excluded. A standard atmosphere is still treated as fixed, so the subtotal
+is not the full atmospheric budget of Eq.99/100.
 Mixing-ratio PC terms are number-density PC terms /Na *1e9. This conversion
 cannot substitute for Eqs.82/84 when adding uncertainty in Na itself.
 
@@ -98,7 +138,7 @@ cannot substitute for Eqs.82/84 when adding uncertainty in Na itself.
 - uNO3_P_X_NC defaults to independent bins (Eq.32); use eighth argument 'full'
   for literal Eqs.36/43. FC implements full ON/OFF and vertical correlation.
 - uP_BKG returns an altitude column for vector z; no caller transpose needed.
-- uNO3 remains a DET/BKG/SAT subtotal; optional overrides support acquisition
+- uNO3 remains the low-level DET/BKG/SAT subtotal; process.m adds O3/Rayleigh; optional overrides support acquisition
   averaging. Passing nonlinear averaged signals alone is insufficient.
 
 ## Verification
