@@ -10,15 +10,20 @@ function out = process(input_path,output_path)
     data_format = "bin";
     prefix = "ol";
     n_avg = 30;
-    n_shots = 1200;
     fd = 270; % inverse dead time (MHz)
-    tau = 1 / (fd * 1e6); % seconds
+    tau_d = 1 / (fd * 1e6); % seconds
     uTau_rel = 0.10; % provisional standard uncertainty until calibrated
-    uTau = uTau_rel * tau;
+    uTau = uTau_rel * tau_d;
     start_merge = 1.5;
     end_merge = 2;
     min_toggle = 3;
     max_toggle = 60;
+
+    % Channel IDs
+    on_fr_id = 1;
+    off_fr_id = 2;
+    on_nr_id = 3;
+    off_nr_id = 4;
 
     % Relative standard uncertainties; working estimates from Table 3.
     u_sigma_o3_rel = 0.02;
@@ -27,6 +32,7 @@ function out = process(input_path,output_path)
     % Bin width
     dz = 3.75;
 
+    % Window sizes for an-pc merge
     window_length_fr = 500;
     window_length_nr = 100;
 
@@ -35,59 +41,62 @@ function out = process(input_path,output_path)
     n_bins = size(an_R,1);
     n_prof = size(an_R,2);
 
+    % Shots per file and channel from the Licel headers.
+    n_shots = reshape([configs.shots],size(pc_R,3),[])';
+
     n_prof_avg = floor(n_prof / n_avg);
 
     % Alt vector
     z = (1:n_bins) .* dz;
     z_km = z.*1e-3;
 
-    % Average and calculate background from binary analog and photon counting data
-    [an_bin_avg, pc_P_avg,times_avg,an_B_avg,pc_B_avg,pc_uB,pc_rb] = preprocess(an_R,pc_R,times,dz,n_avg,n_shots,fd);
-    an_bin_bg = an_bin_avg - an_B_avg;
-    pc_P_bg = pc_P_avg - pc_B_avg;
+    % Sum raw files, correct dead time, then fit the accumulated background.
+    [an_bin_sum, pc_P_sum, times_avg, ids_avg, an_B_sum, pc_B_sum, pc_uB, pc_rb, pc_R_sum, n_shots_total] = preprocess(an_R,pc_R,times,dz,n_avg,n_shots,fd);
+    an_bin_bg = an_bin_sum - an_B_sum;
+    pc_P_bg = pc_P_sum - pc_B_sum;
 
     an_bin_bg(an_bin_bg <= 0) = NaN;
     pc_P_bg(pc_P_bg <= 0) = NaN;
 
     % Convert binary analog signal and background to mV
-    an_mV_avg = scale_binary_analog(an_bin_bg,0,16,1200); % TODO loop over devices and scale each one according to config values
-    an_mV_bg_avg = scale_binary_analog(an_B_avg,0,16,1200);
+    an_mV_avg = scale_binary_analog(an_bin_bg,0,16,n_shots_total); % TODO loop over devices and scale each one according to config values
+    an_mV_bg_avg = scale_binary_analog(an_B_sum,0,16,n_shots_total);
 
     % Convert binary photon counting signal and background MHz
-    pc_p_avg = scale_binary_pc(pc_P_bg,3.75,1200);
-    pc_p_bg_avg = scale_binary_pc(pc_B_avg,3.75,1200);
+    pc_p_avg = scale_binary_pc(pc_P_bg,dz,n_shots_total);
+    pc_p_bg_avg = scale_binary_pc(pc_B_sum,dz,n_shots_total);
 
     % Grid
     z_grid = repmat((1:n_bins)',1,n_prof_avg) .* dz;
 
     % Extract analog signal and background per TR
-    an_on_fr = an_mV_avg(:,:,1);
-    an_off_fr = an_mV_avg(:,:,2);
-    an_on_nr = an_mV_avg(:,:,3);
-    an_off_nr = an_mV_avg(:,:,4);
+    an_on_fr = an_mV_avg(:,:,on_fr_id);
+    an_off_fr = an_mV_avg(:,:,off_fr_id);
+    an_on_nr = an_mV_avg(:,:,on_nr_id);
+    an_off_nr = an_mV_avg(:,:,off_nr_id);
 
-    an_on_fr_bg = an_mV_bg_avg(:,:,1);
-    an_off_fr_bg = an_mV_bg_avg(:,:,2);
-    an_on_nr_bg = an_mV_bg_avg(:,:,3);
-    an_off_nr_bg = an_mV_bg_avg(:,:,4);
+    an_on_fr_bg = an_mV_bg_avg(:,:,on_fr_id);
+    an_off_fr_bg = an_mV_bg_avg(:,:,off_fr_id);
+    an_on_nr_bg = an_mV_bg_avg(:,:,on_nr_id);
+    an_off_nr_bg = an_mV_bg_avg(:,:,off_nr_id);
 
     % Extract photon counting signal and background per TR
-    pc_on_fr = pc_p_avg(:,:,1);
-    pc_off_fr = pc_p_avg(:,:,2);
-    pc_on_nr = pc_p_avg(:,:,3);
-    pc_off_nr = pc_p_avg(:,:,4);
+    pc_on_fr = pc_p_avg(:,:,on_fr_id);
+    pc_off_fr = pc_p_avg(:,:,off_fr_id);
+    pc_on_nr = pc_p_avg(:,:,on_nr_id);
+    pc_off_nr = pc_p_avg(:,:,off_nr_id);
 
-    pc_on_fr_bg = pc_p_bg_avg(:,:,1);
-    pc_off_fr_bg = pc_p_bg_avg(:,:,2);
-    pc_on_nr_bg = pc_p_bg_avg(:,:,3);
-    pc_off_nr_bg = pc_p_bg_avg(:,:,4);
+    pc_on_fr_bg = pc_p_bg_avg(:,:,on_fr_id);
+    pc_off_fr_bg = pc_p_bg_avg(:,:,off_fr_id);
+    pc_on_nr_bg = pc_p_bg_avg(:,:,on_nr_id);
+    pc_off_nr_bg = pc_p_bg_avg(:,:,off_nr_id);
     
     % Merge analog and photon counting signals for far range channels
-    [mg_on_fr,coeff_on_fr,r2_on_fr] = an_pc_merge(an_on_fr, pc_on_fr, window_length_fr, min_toggle, max_toggle);
+    [mg_on_fr,coeff_on_fr,r2_on_fr] =    an_pc_merge(an_on_fr, pc_on_fr, window_length_fr, min_toggle, max_toggle);
     [mg_off_fr,coeff_off_fr,r2_off_fr] = an_pc_merge(an_off_fr, pc_off_fr, window_length_fr, min_toggle, max_toggle);
 
     % Merge analog and photon counting signals for near range channels
-    [mg_on_nr,coeff_on_nr,r2_on_nr] = an_pc_merge(an_on_nr, pc_on_nr, window_length_nr, min_toggle, max_toggle);
+    [mg_on_nr,coeff_on_nr,r2_on_nr] =    an_pc_merge(an_on_nr, pc_on_nr, window_length_nr, min_toggle, max_toggle);
     [mg_off_nr,coeff_off_nr,r2_off_nr] = an_pc_merge(an_off_nr, pc_off_nr, window_length_nr, min_toggle, max_toggle);
 
     %% O3 Processing
@@ -96,8 +105,13 @@ function out = process(input_path,output_path)
     lam_off = 299.1 * 1e-9; % m
 
     % FR and NR filter widths
-    fr_fl_M1 = 11; fr_fl_M2 = 351; fr_fl_h1 = 1.2; fr_fl_h2 = 10;
-    nr_fl_M1 = 11; nr_fl_M2 = 121; nr_fl_h1 = .2; nr_fl_h2 = 1.2;
+    % fr_fl_M1 = 11; fr_fl_M2 = 351;
+    fr_fl_M1 = 75; fr_fl_M2 = 75;
+    fr_fl_h1 = 1.2; fr_fl_h2 = 10;
+    
+    % nr_fl_M1 = 11; nr_fl_M2 = 121; 
+    nr_fl_M1 = 45; nr_fl_M2 = 45; 
+    nr_fl_h1 = .2;  nr_fl_h2 = 1.2;
 
     % FR and NR filters
     C_fr = filter_gen(fr_fl_M1,fr_fl_M2,fr_fl_h1,fr_fl_h2,z_km);
@@ -162,8 +176,23 @@ function out = process(input_path,output_path)
     q_o3_mg_merged = (N_o3_mg_merged ./ Na) * 1e9;
 
     % Photon-count uncertainty budget (literal paper equations).
-    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,1,2,C_fr,dsigma_o3,dz,n_avg,n_shots,fd,uTau);
-    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(pc_R,pc_P_bg,pc_B_avg,pc_uB,pc_rb,3,4,C_nr,dsigma_o3,dz,n_avg,n_shots,fd,uTau);
+    uncertainty_options.dz = dz;
+    uncertainty_options.L = n_shots_total;
+    uncertainty_options.uTau = uTau;
+    uncertainty_options.dsigma = dsigma_o3;
+    uncertainty_options.channelCorrelation = 'independent';
+    uncertainty_options.sigma_o3_on = sigma_o3_on_t;
+    uncertainty_options.sigma_o3_off = sigma_o3_off_t;
+    uncertainty_options.sigma_m_on = sigma_m_on;
+    uncertainty_options.sigma_m_off = sigma_m_off;
+    uncertainty_options.u_sigma_o3_rel = u_sigma_o3_rel;
+    uncertainty_options.u_sigma_m_rel = u_sigma_m_rel;
+
+    uncertainty_options.C = C_fr;
+    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(pc_R_sum,pc_P_bg,N_o3_fr_pc,Na,pc_uB,pc_rb,on_fr_id,off_fr_id,uncertainty_options);
+
+    uncertainty_options.C = C_nr;
+    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(pc_R_sum,pc_P_bg,N_o3_nr_pc,Na,pc_uB,pc_rb,on_nr_id,off_nr_id,uncertainty_options);
 
     % merge_profiles returns HIGH-range weights; the paper uses LOW weights.
     wLow = ones(n_bins,n_prof_avg);
@@ -171,39 +200,32 @@ function out = process(input_path,output_path)
     wLow(merge_ids,:) = repmat(1-w_o3_pc(:),1,n_prof_avg);
     wLow(z_km >= end_merge,:) = 0;
 
-    % Match the retrieval's omitmissing fallback inside the transition.
+    % Match the retrieval's omit missing fallback inside the transition.
     wl = wLow(merge_ids,:);
     lo = N_o3_nr_pc(merge_ids,:); hi = N_o3_fr_pc(merge_ids,:);
-    wl(isnan(lo) & ~isnan(hi)) = 0;
-    wl(~isnan(lo) & isnan(hi)) = 1;
+    wl(isnan(lo) & ~isnan(hi) & wl < 1) = 0;
+    wl(~isnan(lo) & isnan(hi) & wl > 0) = 1;
     wLow(merge_ids,:) = wl;
     [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(pc_uncertainty_nr,pc_uncertainty_fr,wLow);
-
-    % Ozone cross sections: independent wavelength errors (Eq. 47).
-    u_sigma_o3_on = u_sigma_o3_rel .* sigma_o3_on_t;
-    u_sigma_o3_off = u_sigma_o3_rel .* sigma_o3_off_t;
-    pc_uncertainty_fr.O3 = uNO3_dS_O3_R(N_o3_fr_pc,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
-    pc_uncertainty_nr.O3 = uNO3_dS_O3_R(N_o3_nr_pc,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
-    pc_uncertainty_merged.O3 = uNO3_dS_O3_R(N_o3_pc_merged,dsigma_o3,u_sigma_o3_on,u_sigma_o3_off);
-
-    % Rayleigh cross sections: one correlated analytical model (Eq. 55).
-    u_sigma_m_on = u_sigma_m_rel .* sigma_m_on;
-    u_sigma_m_off = u_sigma_m_rel .* sigma_m_off;
-    u_rayleigh = uNO3_dS_M_S(Na,dsigma_o3,u_sigma_m_on,u_sigma_m_off);
-    pc_uncertainty_fr.RAYLEIGH = u_rayleigh;
-    pc_uncertainty_nr.RAYLEIGH = u_rayleigh;
-    pc_uncertainty_merged.RAYLEIGH = u_rayleigh;
-
-    % Add atmospheric components once, after merging the signal components.
-    uNO3_fr = sqrt(uNO3_fr.^2 + pc_uncertainty_fr.O3.^2 + u_rayleigh.^2);
-    uNO3_nr = sqrt(uNO3_nr.^2 + pc_uncertainty_nr.O3.^2 + u_rayleigh.^2);
-    uNO3_pc_merged = sqrt(uNO3_pc_merged.^2 + pc_uncertainty_merged.O3.^2 + u_rayleigh.^2);
 
     uqO3_fr = uNO3_fr ./ Na .* 1e9;
     uqO3_nr = uNO3_nr ./ Na .* 1e9;
     uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
 
+    %% Output
     out = struct();
+
+    % Raw analog signals
+    out.an_R_on_fr = an_R(:,:,on_fr_id);
+    out.an_R_off_fr = an_R(:,:,off_fr_id);
+    out.an_R_on_nr = an_R(:,:,on_nr_id);
+    out.an_R_off_nr = an_R(:,:,off_nr_id);
+
+    % Raw PC signals
+    out.pc_R_on_fr = pc_R(:,:,on_fr_id);
+    out.pc_R_off_fr = pc_R(:,:,off_fr_id);
+    out.pc_R_on_nr = pc_R(:,:,on_nr_id);
+    out.pc_R_off_nr = pc_R(:,:,off_nr_id);
 
     % Analog signal (mV)
     out.an_on_fr = an_on_fr;
@@ -286,6 +308,11 @@ function out = process(input_path,output_path)
     out.times = times;
     out.times_avg = times_avg;
 
+    out.ids_avg = ids_avg;
+    out.n_shots_total = n_shots_total;
+    out.pc_R_sum = pc_R_sum;
+    out.pc_P_sum = pc_P_bg;
+
     % Licel configs
     out.configs = configs;
 
@@ -316,9 +343,10 @@ function out = process(input_path,output_path)
     out.pc_uncertainty_nr = pc_uncertainty_nr;
     out.pc_uncertainty_merged = pc_uncertainty_merged;
     out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT','O3','RAYLEIGH'}},...
-        'complete_atmospheric_budget',false,'tau_seconds',tau,'uTau_seconds',uTau,...
+        'complete_atmospheric_budget',false,'tau_seconds',tau_d,'uTau_seconds',uTau,...
         'uTau_relative',uTau_rel,'dead_time_uncertainty_source','provisional engineering estimate',...
         'channel_correlation','independent','formula_mode','literal_paper',...
+        'averaging_method','raw_counts_accumulation','signal_normalization','total_counts',...
         'cross_section_convention','single_path',...
         'ozone_cross_section_correlation','independent','rayleigh_cross_section_correlation','full',...
         'u_sigma_o3_relative',u_sigma_o3_rel,'u_sigma_m_relative',u_sigma_m_rel,...

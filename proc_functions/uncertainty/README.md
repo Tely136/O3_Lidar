@@ -26,7 +26,7 @@ This does not implement the entire uncertainty budget in the paper.
 
 | Function | Equations | Review/change |
 |---|---|---|
-| uDET | 28-29 | sqrt(total counts) correct; optional equal-exposure mean factor added |
+| uDET | 28-29 | sqrt(accumulated counts); no additional averaging factor |
 | uP_DET | 30-31 | Literal expression retained; counts/exposure contract and invalid raw counts documented |
 | uP_SAT | 34-35 | Literal expression retained; elementwise shots/uTau, seconds and time correlation documented |
 | uP_BKG | 41-42 | Elementwise profile support; caller now reverses slope/intercept SE order |
@@ -64,17 +64,43 @@ formulas are not silently replaced with those derivatives. Detection and
 background estimates from the same fitted raw data also need covariance for
 a fully general treatment. These are limitations of literal application.
 
-## Acquisition averaging and integration
+## File accumulation and integration
 
-`photon_count_uncertainty` replays each raw acquisition's correction before
-propagating Eqs.30/34. For a group of n independent detections,
-`uDET_mean = sqrt(sum(uDET_i.^2))/n`. For one fixed uncertain dead time shared
-across acquisitions, `uSAT_mean = mean(uSAT_i)`, without a sqrt(n) reduction.
-The background is fitted once to the averaged corrected signal, as in the
-current `preprocess`; its SEs must not be divided by sqrt(n) again.
-The wrapper applies the group background to each acquisition, preserves
-signed individual noise values and uses the numbered equations literally.
-It rejects rates at/above fd in propagated DET/SAT outputs.
+Each group of `n_avg` files is treated as one longer acquisition. Preprocessing
+sums RAW analog and photon-count data first, sums the corresponding shot
+counts, then dead-time corrects the accumulated PC signal and fits backgrounds.
+`n_shots` is read per file/channel from the Licel headers. For identical files,
+`n_shots_total = n_avg*n_shots`; different exposures are also summed correctly.
+Only complete file groups are used, as before. `ids_avg` retains group membership
+and `times_avg` retains the mean timestamps for plotting.
+
+All photon-count uncertainty formulas now receive accumulated counts:
+
+```matlab
+u_detection = uP_DET(P_sum,R_sum);
+u_saturation = uP_SAT(P_sum,dz,n_shots_total,uTau);
+```
+
+There are no per-file uncertainty averaging loops or extra sqrt(n) factors.
+Poisson noise uses sqrt(R_sum); a fixed dead-time uncertainty does not improve
+in relative terms just because the exposure is longer. Background-fit SEs use
+the accumulated-count normalization as well. Conversion to MHz or mV divides by
+the same total shots, keeping the physical signal units consistent.
+
+`photon_count_uncertainty` calculates all five budget components in one place:
+DET, SAT, BKG, O3 and RAYLEIGH. FR and NR are separate calls with their own ozone
+number density and derivative filters. The six signal uncertainties are passed
+to `uNO3` for DIAL propagation; the two cross-section terms and five-component
+quadrature total are calculated in the same budget function. Its options hold
+dz, total shots L, uTau, dsigma, C, channel correlation, cross sections and their
+relative standard uncertainties. The numbered paper formulas are unchanged.
+
+Summing before nonlinear correction is intentionally different from correcting
+each file before averaging when rates vary. This design reproduces one longer
+raw accumulation; it assumes the combined interval is suitable for one effective
+count-rate correction. No interpolation across missing acquisition times is added.
+The output records `pc_R_sum`, corrected/background-subtracted `pc_P_sum`, and
+`n_shots_total`, alongside the original raw data and grouping variables.
 
 Dependency and BDM cross-section paths in `process.m` are resolved from the
 script location so the relocated project can be tested consistently.
@@ -118,10 +144,12 @@ because both cross sections come from one analytical model. A common 2%
 Rayleigh scale uncertainty therefore gives 2% of the Rayleigh correction,
 not the quadrature of two independent wavelength errors.
 
-Ozone uncertainty is evaluated using each final FR, NR and merged ozone
-profile. Rayleigh uncertainty is the same atmospheric profile for all ranges.
-Both are added once after merging the DET/BKG/SAT components, without an
-artificial reduction from independent-range averaging (Eqs.93-94).
+Ozone uncertainty is evaluated using each range's ozone profile. Rayleigh
+uncertainty is the same atmospheric profile for all ranges. All components are
+calculated within the FR/NR budget function. Merging treats O3 as one shared
+fractional uncertainty: its signed component follows the same linear weights
+as the ozone profile, equivalent to evaluating Eq.47 on the merged density. The common Rayleigh component is carried
+through unchanged. They receive no independent-noise reduction (Eqs.93-94).
 The saved metadata records the input fractions and correlation assumptions.
 The live profile plot shows these two additional components and the updated
 subtotal; rerun processing to populate the fields in older saved files.
@@ -134,12 +162,19 @@ cannot substitute for Eqs.82/84 when adding uncertainty in Na itself.
 
 ## Compatibility changes
 
-- uNO3_dS_M_R's second argument now means **ozone differential**, not Rayleigh.
-- uNO3_P_X_NC defaults to independent bins (Eq.32); use eighth argument 'full'
-  for literal Eqs.36/43. FC implements full ON/OFF and vertical correlation.
-- uP_BKG returns an altitude column for vector z; no caller transpose needed.
-- uNO3 remains the low-level DET/BKG/SAT subtotal; process.m adds O3/Rayleigh; optional overrides support acquisition
-  averaging. Passing nonlinear averaged signals alone is insufficient.
+- uNO3_dS_M_R's denominator is the ozone differential, not Rayleigh.
+- uP_DET takes (P,R); uP_SAT takes (P,dz,L,uTau). L is total accumulated
+  shots. uDET takes accumulated R directly. The old ids_avg/nAverage arguments
+  are removed from the signal uncertainty functions.
+- preprocess returns raw pc_R_sum ninth and n_shots_total tenth. The earlier
+  per-file pc_P_unavg output is removed.
+- photon_count_uncertainty takes (R,P,N,Na,uB,rb,id_on,id_off,options), with
+  accumulated R/P, range-specific ozone N and air density Na. options.L is
+  scalar or [1 x profile x channel]. Cross-section options are required.
+- merge_pc_uncertainty now accepts all five component fields, including O3
+  and RAYLEIGH, and returns their merged quadrature total.
+- uNO3 still accepts the six signal uncertainty arrays explicitly; no fallback
+  calculations or uncertainty overrides are used.
 
 ## Verification
 
@@ -153,5 +188,5 @@ assertSuccess(results);
 
 Tests compare scalar/vector/multiple-profile results against independent
 hand-calculated equations, check the literal signed cases, factor-of-two
-convention, slope/intercept order, averaging, range endpoints, component
-merging, and a synthetic acquisition pipeline using real preprocessing.
+convention, slope/intercept order, accumulated-count scaling, range endpoints, component merging, variable
+shot totals, and a synthetic accumulation pipeline using real preprocessing.

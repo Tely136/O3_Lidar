@@ -7,12 +7,12 @@ function setupOnce(t)
 end
 function testRawPoisson(t)
     verifyEqual(t,uDET([0 4 100]),[0 2 10]);
-    verifyEqual(t,uDET(100,25),2);
+    verifyEqual(t,uDET(2500),50);
     verifyTrue(t,isnan(uDET(-1)));
 end
 function testSignalEquations(t)
     verifyEqual(t,uP_DET(200,100),40);
-    verifyEqual(t,uP_DET(200,100,25),8);
+    verifyEqual(t,uP_DET(25*200,25*100),25*8);
     verifyTrue(t,isnan(uP_DET(0,0)));
     P=[10 20;30 40]; L=[100 200]; tau=[1e-9 2e-9];
     expected=299792458./(2*3.75.*L).*P.^2.*tau;
@@ -72,79 +72,92 @@ function testRangeMerge(t)
     verifyEqual(t,uNO3_MRG_NC(4,3,0),4);
     verifyEqual(t,uNO3_MRG_NC(4,3,0.5),2.5);
     verifyEqual(t,uNO3_MRG_FC(4,3,0.5),3.5);
-    lo=struct('DET',[3;3;NaN],'BKG',[2;2;NaN],'SAT',[1;1;NaN]);
-    hi=struct('DET',[NaN;4;4],'BKG',[NaN;4;4],'SAT',[NaN;3;3]);
+    lo=struct('DET',[3;3;NaN],'BKG',[2;2;NaN],'SAT',[1;1;NaN],'O3',[5;6;NaN],'RAYLEIGH',[7;7;7]);
+    hi=struct('DET',[NaN;4;4],'BKG',[NaN;4;4],'SAT',[NaN;3;3],'O3',[NaN;10;10],'RAYLEIGH',[7;7;7]);
     [total,m]=merge_pc_uncertainty(lo,hi,[1;0.5;0]);
     verifyEqual(t,m.DET,[3;2.5;4]);
     verifyEqual(t,m.BKG,[2;3;4]); verifyEqual(t,m.SAT,[1;2;3]);
-    verifyEqual(t,total,sqrt([14;19.25;41]),'RelTol',1e-12);
+    verifyEqual(t,m.O3,[5;8;10]);
+    verifyEqual(t,m.RAYLEIGH,[7;7;7]);
+    verifyEqual(t,total,sqrt([88;132.25;190]),'RelTol',1e-12);
 end
 function testSubtotalAndCoefficientOrder(t)
-    [P,C]=fixture(); z=(1:7)'; nprof=2;
-    opts=struct('uDET_on',2*ones(7,2),'uDET_off',3*ones(7,2),...
-        'uSAT_on',z+zeros(7,2),'uSAT_off',2*z+zeros(7,2));
-    uB=[0.5 1;2 3]; rb=[0 0];
-    [u,det,bkg,sat]=uNO3(P,P,P,P,4,100,0,2,C,uB,uB,rb,rb,z,opts);
-    ub=sqrt(4+0.25*z.^2);
-    expected=(sqrt(2)*ub(5)-sqrt(2)*ub(3))/(2*P(4,1)*16);
-    verifyEqual(t,bkg(4,1),expected,'RelTol',1e-12);
-    verifyEqual(t,u(4,:),sqrt(det(4,:).^2+bkg(4,:).^2+sat(4,:).^2),'RelTol',1e-12);
-    opts.channelCorrelation='full';
-    [~,~,bkg]=uNO3(P,P,P,P,4,100,0,2,C,uB,uB,rb,rb,z,opts);
-    verifyEqual(t,bkg(4,:),[0 0]);
+    [P,C] = fixture();
+    R = cat(3,P,P);
+    P_sum = R;
+    uB = repmat([0.5 1; 2 3],1,1,2);
+    rb = zeros(2,2);
+    options = struct('dz',4,'L',100,'uTau',0,'dsigma',2,'C',{C});
+    options.sigma_o3_on = 1;
+    options.sigma_o3_off = 0;
+    options.sigma_m_on = 1;
+    options.sigma_m_off = 0;
+    options.u_sigma_o3_rel = 0;
+    options.u_sigma_m_rel = 0;
+
+    [u,parts] = photon_count_uncertainty(R,P_sum,ones(size(P)),ones(size(P)),uB,rb,1,2,options);
+    z = (1:7)' * options.dz;
+    ub = sqrt(4 + 0.25*z.^2);
+    expected = (sqrt(2)*ub(5) - sqrt(2)*ub(3)) / (2*P(4,1)*16);
+    verifyEqual(t,parts.BKG(4,1),expected,'RelTol',1e-12);
+    verifyEqual(t,u(4,:),sqrt(parts.DET(4,:).^2 + parts.BKG(4,:).^2 + parts.SAT(4,:).^2),'RelTol',1e-12);
+
+    options.channelCorrelation = 'full';
+    [~,parts] = photon_count_uncertainty(R,P_sum,ones(size(P)),ones(size(P)),uB,rb,1,2,options);
+    verifyEqual(t,parts.BKG(4,:),[0 0]);
 end
-function testAcquisitionAveraging(t)
-    nb=7; n=2; nc=4; dz=3.75; L=100; fd=270; tau=1e-9;
-    R=zeros(nb,n,nc); R(:,1,:)=10; R(:,2,:)=100;
-    rates=R* (1e-6*299792458/(2*dz*L));
-    Q=R./(1-rates/fd); B=ones(nb,1,nc);
-    P=mean(Q,2)-B; uB=zeros(2,1,nc); rb=zeros(1,nc);
-    C=repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,nb);
-    [~,parts]=photon_count_uncertainty(R,P,B,uB,rb,1,2,C,2,dz,n,L,fd,tau);
-    Pi=squeeze(Q(4,:,1))-1; Ri=[10 100];
-    acquisition_u=(Pi./Ri).^2.*sqrt(Ri);
-    mean_u=sqrt(sum(acquisition_u.^2))/2;
-    % Same channels, independent DET, three-point derivative energy=1/2.
-    expected=mean_u/P(4,1,1)/(4*dz);
-    verifyEqual(t,parts.DET(4),expected,'RelTol',1e-12);
-    naive=uP_DET(P(4),mean(Ri),2)/(P(4)*4*dz);
-    verifyGreaterThan(t,abs(naive-expected),1e-6);
-    verifyEqual(t,parts.SAT(4),0,'AbsTol',1e-20);
+function testAccumulatedDetectionScaling(t)
+    R = 100;
+    P = 200;
+    n = 30;
+
+    single = uP_DET(P,R);
+    accumulated = uP_DET(n*P,n*R);
+    verifyEqual(t,accumulated,sqrt(n)*single,'RelTol',1e-12);
+    verifyEqual(t,accumulated/(n*P),single/P/sqrt(n),'RelTol',1e-12);
 end
-function testSaturationAveraging(t)
-    nb=7; n=2; nc=4; dz=3.75; L=100; fd=270; tau=1e-9;
-    z=(1:nb)'; R=zeros(nb,n,nc);
-    for j=1:nc
-        R(:,1,j)=10*z; R(:,2,j)=20*z;
-    end
-    rate=R.*(1e-6*299792458/(2*dz*L));
-    Q=R./(1-rate/fd); B=ones(nb,1,nc); P=mean(Q,2)-B;
-    C=repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,nb);
-    [~,parts]=photon_count_uncertainty(R,P,B,zeros(2,1,nc),zeros(1,nc),...
-        1,2,C,2,dz,n,L,fd,tau);
-    % Eq.34 averaged linearly because one uncertain tau is shared in time.
-    perAcq=299792458/(2*dz*L).*(Q(:,:,1)-1).^2*tau;
-    avgSat=mean(perAcq,2);
-    rel=sqrt(2)*avgSat./P(:,:,1);
-    expected=(rel(5)-rel(3))/(8*dz);
-    verifyEqual(t,parts.SAT(4),expected,'RelTol',1e-12);
-    % It must NOT acquire the independent-noise 1/sqrt(n) reduction.
-    verifyGreaterThan(t,abs(parts.SAT(4)-expected/sqrt(2)),1e-9);
+function testAccumulatedSaturationScaling(t)
+    P = [10 20; 30 40];
+    L = 100;
+    n = 30;
+    uTau = 1e-9;
+
+    single = uP_SAT(P,3.75,L,uTau);
+    accumulated = uP_SAT(n*P,3.75,n*L,uTau);
+    verifyEqual(t,accumulated,n*single,'RelTol',1e-12);
+    verifyEqual(t,accumulated./(n*P),single./P,'RelTol',1e-12);
 end
-function testSyntheticPreprocessPipeline(t)
-    % Real background fit and averaging; 7000+ bins required by preprocess.
-    nb=7010; nr=4; nc=4; dz=3.75; L=1200; fd=270;
-    z=(1:nb)'; R=zeros(nb,nr,nc);
-    for j=1:nc
-        for i=1:nr
-            R(:,i,j)=20+j+100*exp(-z/500)*(1+0.1*i)+0.1*sin(z+i);
+function testSyntheticAccumulationPipeline(t)
+    nb = 7010; nr = 5; nc = 4; dz = 3.75; L = 1200; fd = 270;
+    z = (1:nb)'; R = zeros(nb,nr,nc);
+    for j = 1:nc
+        for i = 1:nr
+            R(:,i,j) = 20+j+100*exp(-z/500)*(1+0.1*i)+0.1*sin(z+i);
         end
     end
-    times=repmat(datetime(2026,1,1)+(0:nr-1)'*minutes(1),1,3);
-    [~,Q,~,~,B,uB,rb]=preprocess(R,R,times,dz,2,L,fd);
-    P=Q-B; P(P<=0)=NaN;
-    C=repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,nb);
-    [total,parts]=photon_count_uncertainty(R,P,B,uB,rb,1,2,C,1e-22,dz,2,L,fd,0);
+    times = repmat(datetime(2026,1,1)+(0:nr-1)'*minutes(1),1,3);
+    [an_sum,Q,~,ids_avg,~,B,uB,rb,R_sum,shots_total] = preprocess(R,R,times,dz,2,L,fd);
+    P = Q-B;
+    P(P<=0) = NaN;
+    C = repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,nb);
+    options = struct('dz',dz,'L',shots_total,'uTau',0,'dsigma',1e-22,'C',{C});
+    options.sigma_o3_on = 1;
+    options.sigma_o3_off = 0;
+    options.sigma_m_on = 1;
+    options.sigma_m_off = 0;
+    options.u_sigma_o3_rel = 0;
+    options.u_sigma_m_rel = 0;
+
+    verifyEqual(t,R_sum(:,1,:),sum(R(:,1:2,:),2));
+    verifyEqual(t,an_sum(:,1,:),sum(R(:,1:2,:),2));
+    verifyEqual(t,shots_total,2*L*ones(1,2,nc));
+    verifyEqual(t,ids_avg,[1;1;2;2;NaN]);
+
+    rate = R_sum * (1e-6*299792458/(2*dz)) ./ shots_total;
+    expected = R_sum ./ (1-rate/fd);
+    verifyEqual(t,Q,expected,'RelTol',1e-12);
+
+    [total,parts] = photon_count_uncertainty(R_sum,P,ones(nb,2),ones(nb,2),uB,rb,1,2,options);
     verifySize(t,total,[nb 2]);
     verifyTrue(t,all(isfinite(total(50:100,:)),'all'));
     verifyEqual(t,total(50:100,:),hypot(parts.DET(50:100,:),parts.BKG(50:100,:)),'RelTol',1e-12);
@@ -174,6 +187,84 @@ function testOzoneCrossSectionRelativeFloor(t)
 
     verifyEqual(t,uNO3_dS_O3_R(N,differential,0.02.*sigma_on,0.02.*sigma_off),expected,'RelTol',1e-12);
     verifyEqual(t,uNO3_dS_O3_R(N,differential,zeros(2),zeros(2)),zeros(2));
+end
+function testVariableShotAccumulation(t)
+    nb = 7010; nr = 5; nc = 4; dz = 3.75; fd = 270;
+    shots = repmat([100;200;300;400;500],1,nc);
+    rate = 2 + 10*exp(-(1:nb)'/1000);
+    factor = 1e-6*299792458/(2*dz);
+    R = NaN(nb,nr,nc);
+    for j = 1:nc
+        for i = 1:nr
+            R(:,i,j) = rate .* shots(i,j) ./ factor;
+        end
+    end
+    times = repmat(datetime(2026,1,1)+(0:nr-1)'*minutes(1),1,3);
+    [~,Q,~,ids_avg,~,~,~,~,R_sum,shots_total] = preprocess(R,R,times,dz,2,shots,fd);
+
+    verifyEqual(t,shots_total,repmat([300 700],1,1,nc));
+    expected_rate = repmat(rate,1,2,nc);
+    verifyEqual(t,scale_binary_pc(R_sum,dz,shots_total),expected_rate,'RelTol',1e-12);
+    verifyEqual(t,scale_binary_pc(Q,dz,shots_total),expected_rate./(1-expected_rate/fd),'RelTol',1e-12);
+    verifyEqual(t,ids_avg,[1;1;2;2;NaN]);
+end
+function testExplicitPropagationInputs(t)
+    [P,C] = fixture();
+    options = struct('dz',4,'dsigma',2,'C',{C});
+    zero = zeros(size(P));
+
+    [u,det,bkg,sat] = uNO3(P,P,2*ones(size(P)),3*ones(size(P)),zero,zero,zero,zero,options);
+    verifyEqual(t,u(4,:),sqrt(13/2)./(P(4,:)*16),'RelTol',1e-12);
+    verifyEqual(t,u,det);
+    verifyEqual(t,bkg(4,:),[0 0]);
+    verifyEqual(t,sat(4,:),[0 0]);
+end
+function testAccumulationBeforeDeadTime(t)
+    nb = 7010; nc = 4; dz = 3.75; L = 100; fd = 270;
+    R = zeros(nb,2,nc);
+    R(:,1,:) = 10;
+    R(:,2,:) = 100;
+    times = repmat(datetime(2026,1,1)+(0:1)'*minutes(1),1,3);
+    [~,Q,~,~,~,~,~,~,R_sum,shots_total] = preprocess(R,R,times,dz,2,L,fd);
+
+    raw_rate = 110 * (1e-6*299792458/(2*dz)) / (2*L);
+    expected = 110/(1-raw_rate/fd);
+    verifyEqual(t,Q(4,1,1),expected,'RelTol',1e-12);
+    verifyEqual(t,R_sum(4,1,1),110);
+    verifyEqual(t,shots_total(1,1,1),2*L);
+
+    separately_corrected = 10/(1-10*(1e-6*299792458/(2*dz*L))/fd) + 100/(1-100*(1e-6*299792458/(2*dz*L))/fd);
+    verifyGreaterThan(t,abs(Q(4,1,1)-separately_corrected),1);
+end
+function testUnifiedCrossSectionBudget(t)
+    [P,C] = fixture();
+    R = cat(3,P,P);
+    N = 10*ones(size(P));
+    Na = 1000*ones(size(P));
+    uB = ones(2,2,2);
+    rb = zeros(2,2);
+    options = struct('dz',4,'L',100,'uTau',1e-9,'dsigma',2,'C',{C});
+    options.sigma_o3_on = 5;
+    options.sigma_o3_off = 3;
+    options.sigma_m_on = 0.05;
+    options.sigma_m_off = 0.03;
+    options.u_sigma_o3_rel = 0.02;
+    options.u_sigma_m_rel = 0.02;
+
+    [total,parts] = photon_count_uncertainty(R,R,N,Na,uB,rb,1,2,options);
+    verifyEqual(t,parts.O3,N*0.02*sqrt(34)/2,'RelTol',1e-12);
+    verifyEqual(t,parts.RAYLEIGH,Na*0.02*0.02/2,'RelTol',1e-12);
+    expected = sqrt(parts.DET.^2 + parts.BKG.^2 + parts.SAT.^2 + parts.O3.^2 + parts.RAYLEIGH.^2);
+    verifyEqual(t,total,expected);
+end
+function testSharedAtmosphericMerge(t)
+    low = struct('DET',1,'BKG',2,'SAT',3,'O3',-6,'RAYLEIGH',7);
+    high = struct('DET',1,'BKG',2,'SAT',3,'O3',2,'RAYLEIGH',7);
+
+    [total,merged] = merge_pc_uncertainty(low,high,0.75);
+    verifyEqual(t,merged.O3,-4);
+    verifyEqual(t,merged.RAYLEIGH,7);
+    verifyEqual(t,total,sqrt(0.75^2+0.25^2+2^2+3^2+(-4)^2+7^2),'RelTol',1e-12);
 end
 function [P,C]=fixture()
     P=repmat([100 200],7,1);

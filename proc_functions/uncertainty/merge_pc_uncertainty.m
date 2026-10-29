@@ -9,7 +9,7 @@ function [total,merged] = merge_pc_uncertainty(low,high,wLow)
         error('O3:MergeWeights','Weights must match profiles and lie in [0,1].');
     end
 
-    fields = {'DET','BKG','SAT'};
+    fields = {'DET','BKG','SAT','O3','RAYLEIGH'};
 
     for j = 1:numel(fields)
         name = fields{j};
@@ -22,6 +22,12 @@ function [total,merged] = merge_pc_uncertainty(low,high,wLow)
 
         if strcmp(name,'DET')
             uncertainty = uNO3_MRG_NC(high_component,low_component,wLow);
+        elseif strcmp(name,'O3')
+            % One shared fractional error; preserve the ozone-density sign.
+            uncertainty = wLow .* low_component + (1-wLow) .* high_component;
+        elseif strcmp(name,'RAYLEIGH')
+            % The same atmospheric correction applies to both ranges.
+            uncertainty = low_component;
         else
             uncertainty = uNO3_MRG_FC(high_component,low_component,wLow);
         end
@@ -31,5 +37,5 @@ function [total,merged] = merge_pc_uncertainty(low,high,wLow)
         merged.(name) = uncertainty;
     end
 
-    total = sqrt(merged.DET.^2 + merged.BKG.^2 + merged.SAT.^2);
+    total = sqrt(merged.DET.^2 + merged.BKG.^2 + merged.SAT.^2 + merged.O3.^2 + merged.RAYLEIGH.^2);
 end
