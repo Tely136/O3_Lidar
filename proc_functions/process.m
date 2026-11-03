@@ -99,18 +99,45 @@ function out = process(input_path,output_path)
     [mg_on_nr,coeff_on_nr,r2_on_nr] =    an_pc_merge(an_on_nr, pc_on_nr, window_length_nr, min_toggle, max_toggle);
     [mg_off_nr,coeff_off_nr,r2_off_nr] = an_pc_merge(an_off_nr, pc_off_nr, window_length_nr, min_toggle, max_toggle);
 
+    % Find linear range for FR and NR photon counting data
+    %  add search range
+    range_on_fr = linear_pc_range(an_on_fr,pc_on_fr,window_length_fr);
+    range_off_fr = linear_pc_range(an_off_fr,pc_off_fr,window_length_fr);
+
+    range_on_nr = linear_pc_range(an_on_nr,pc_on_nr,window_length_nr);
+    range_off_nr = linear_pc_range(an_off_nr,pc_off_nr,window_length_nr);
+
+    [~,start_merge_id] = min(abs(z_km - start_merge));
+    [~,end_merge_id] = min(abs(z_km - end_merge));
+
+    start_pc_merge = NaN(1,n_prof_avg);
+    end_pc_merge = NaN(1,n_prof_avg);
+    for i = 1:n_prof_avg
+        fr_start = max(range_on_fr(1,i), range_off_fr(1,i));
+        fr_end = min(range_on_fr(2,i), range_off_fr(2,i));
+
+        nr_start = max(range_on_nr(1,i), range_off_nr(1,i));
+        nr_end = min(range_on_nr(2,i), range_off_nr(2,i));
+
+        start_pc_merge(i) = fr_start;
+        end_pc_merge(i) = nr_end;
+
+        % break
+    end
+
+
     %% O3 Processing
     % On and off wavelengths
     lam_on = 287.2 * 1e-9; % m
     lam_off = 299.1 * 1e-9; % m
 
     % FR and NR filter widths
-    % fr_fl_M1 = 11; fr_fl_M2 = 351;
-    fr_fl_M1 = 75; fr_fl_M2 = 75;
+    fr_fl_M1 = 11; fr_fl_M2 = 351;
+    % fr_fl_M1 = 75; fr_fl_M2 = 75; % constant 
     fr_fl_h1 = 1.2; fr_fl_h2 = 10;
     
-    % nr_fl_M1 = 11; nr_fl_M2 = 121; 
-    nr_fl_M1 = 45; nr_fl_M2 = 45; 
+    nr_fl_M1 = 11; nr_fl_M2 = 121; 
+    % nr_fl_M1 = 45; nr_fl_M2 = 45; % constant
     nr_fl_h1 = .2;  nr_fl_h2 = 1.2;
 
     % FR and NR filters
@@ -157,9 +184,9 @@ function out = process(input_path,output_path)
     N_o3_nr_mg = dial(mg_on_nr,mg_off_nr,C_nr,dz,dsigma_o3) - N_o3_dm;
 
     % Merge near range and far range for analog calculated profile, photon counting calculated profile, and analog-pc calculated profile
-    [N_o3_an_merged,w_o3_an] = merge_profiles(N_o3_nr_an,N_o3_fr_an,z_km,start_merge,end_merge);
-    [N_o3_pc_merged,w_o3_pc] = merge_profiles(N_o3_nr_pc,N_o3_fr_pc,z_km,start_merge,end_merge);
-    [N_o3_mg_merged,w_o3_mg] = merge_profiles(N_o3_nr_mg,N_o3_fr_mg,z_km,start_merge,end_merge);
+    [N_o3_an_merged,w_o3_an] = merge_profiles(N_o3_nr_an,N_o3_fr_an,start_merge_id,end_merge_id);
+    [N_o3_pc_merged,w_o3_pc] = merge_profiles(N_o3_nr_pc,N_o3_fr_pc,start_pc_merge,end_pc_merge);
+    [N_o3_mg_merged,w_o3_mg] = merge_profiles(N_o3_nr_mg,N_o3_fr_mg,start_merge_id,end_merge_id);
 
     % Convert ozone number density to mixing ratio (ppb)
     q_o3_an_fr = (N_o3_fr_an ./ Na) * 1e9;
@@ -175,7 +202,7 @@ function out = process(input_path,output_path)
     q_o3_pc_merged = (N_o3_pc_merged ./ Na) * 1e9;
     q_o3_mg_merged = (N_o3_mg_merged ./ Na) * 1e9;
 
-    % Photon-count uncertainty budget (literal paper equations).
+    % Photon-count uncertainty budget
     uncertainty_options.dz = dz;
     uncertainty_options.L = n_shots_total;
     uncertainty_options.uTau = uTau;
@@ -194,67 +221,67 @@ function out = process(input_path,output_path)
     uncertainty_options.C = C_nr;
     [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(pc_R_sum,pc_P_bg,N_o3_nr_pc,Na,pc_uB,pc_rb,on_nr_id,off_nr_id,uncertainty_options);
 
-    % merge_profiles returns HIGH-range weights; the paper uses LOW weights.
-    wLow = ones(n_bins,n_prof_avg);
-    merge_ids = find(z_km > start_merge & z_km < end_merge);
-    wLow(merge_ids,:) = repmat(1-w_o3_pc(:),1,n_prof_avg);
-    wLow(z_km >= end_merge,:) = 0;
-
-    % Match the retrieval's omit missing fallback inside the transition.
-    wl = wLow(merge_ids,:);
-    lo = N_o3_nr_pc(merge_ids,:); hi = N_o3_fr_pc(merge_ids,:);
-    wl(isnan(lo) & ~isnan(hi) & wl < 1) = 0;
-    wl(~isnan(lo) & isnan(hi) & wl > 0) = 1;
-    wLow(merge_ids,:) = wl;
-    [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(pc_uncertainty_nr,pc_uncertainty_fr,wLow);
-
-    uqO3_fr = uNO3_fr ./ Na .* 1e9;
-    uqO3_nr = uNO3_nr ./ Na .* 1e9;
-    uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
+    % % merge_profiles returns HIGH-range weights; the paper uses LOW weights.
+    % wLow = ones(n_bins,n_prof_avg);
+    % merge_ids = start_merge_id:end_merge_id;
+    % wLow(merge_ids,:) = repmat(1-w_o3_pc(:),1,n_prof_avg);
+    % wLow(z_km >= end_merge,:) = 0;
+    % 
+    % % Match the retrieval's omit missing fallback inside the transition.
+    % wl = wLow(merge_ids,:);
+    % lo = N_o3_nr_pc(merge_ids,:); hi = N_o3_fr_pc(merge_ids,:);
+    % wl(isnan(lo) & ~isnan(hi) & wl < 1) = 0;
+    % wl(~isnan(lo) & isnan(hi) & wl > 0) = 1;
+    % wLow(merge_ids,:) = wl;
+    % [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(pc_uncertainty_nr,pc_uncertainty_fr,wLow);
+    % 
+    % uqO3_fr        = uNO3_fr ./ Na .* 1e9;
+    % uqO3_nr        = uNO3_nr ./ Na .* 1e9;
+    % uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
 
     %% Output
     out = struct();
 
     % Raw analog signals
-    out.an_R_on_fr = an_R(:,:,on_fr_id);
+    out.an_R_on_fr  = an_R(:,:,on_fr_id);
     out.an_R_off_fr = an_R(:,:,off_fr_id);
-    out.an_R_on_nr = an_R(:,:,on_nr_id);
+    out.an_R_on_nr  = an_R(:,:,on_nr_id);
     out.an_R_off_nr = an_R(:,:,off_nr_id);
 
     % Raw PC signals
-    out.pc_R_on_fr = pc_R(:,:,on_fr_id);
+    out.pc_R_on_fr  = pc_R(:,:,on_fr_id);
     out.pc_R_off_fr = pc_R(:,:,off_fr_id);
-    out.pc_R_on_nr = pc_R(:,:,on_nr_id);
+    out.pc_R_on_nr  = pc_R(:,:,on_nr_id);
     out.pc_R_off_nr = pc_R(:,:,off_nr_id);
 
     % Analog signal (mV)
-    out.an_on_fr = an_on_fr;
+    out.an_on_fr  = an_on_fr;
     out.an_off_fr = an_off_fr;
-    out.an_on_nr = an_on_nr;
+    out.an_on_nr  = an_on_nr;
     out.an_off_nr = an_off_nr;
 
     % Analog signal background (mV)
-    out.an_on_fr_bg = an_on_fr_bg;
+    out.an_on_fr_bg  = an_on_fr_bg;
     out.an_off_fr_bg = an_off_fr_bg;
-    out.an_on_nr_bg = an_on_nr_bg;
+    out.an_on_nr_bg  = an_on_nr_bg;
     out.an_off_nr_bg = an_off_nr_bg;
 
     % PC signal (MHz)
-    out.pc_on_fr = pc_on_fr;
+    out.pc_on_fr  = pc_on_fr;
     out.pc_off_fr = pc_off_fr;
-    out.pc_on_nr = pc_on_nr;
+    out.pc_on_nr  = pc_on_nr;
     out.pc_off_nr = pc_off_nr;
 
     % PC signal background (MHz)
-    out.pc_on_fr_bg = pc_on_fr_bg;
+    out.pc_on_fr_bg  = pc_on_fr_bg;
     out.pc_off_fr_bg = pc_off_fr_bg;
-    out.pc_on_nr_bg = pc_on_nr_bg;
+    out.pc_on_nr_bg  = pc_on_nr_bg;
     out.pc_off_nr_bg = pc_off_nr_bg;
 
     % AN-PC Merge signal (MHz)
-    out.mg_on_fr = mg_on_fr;
+    out.mg_on_fr  = mg_on_fr;
     out.mg_off_fr = mg_off_fr;
-    out.mg_on_nr = mg_on_nr;
+    out.mg_on_nr  = mg_on_nr;
     out.mg_off_nr = mg_off_nr;
 
     % Ozone mixing ratio (ppb)
@@ -292,15 +319,15 @@ function out = process(input_path,output_path)
     out.N_o3_dm = N_o3_dm;
 
     % AN-PC Merge coefficients
-    out.coeff_on_fr = coeff_on_fr;
+    out.coeff_on_fr  = coeff_on_fr;
     out.coeff_off_fr = coeff_off_fr;
-    out.coeff_on_nr = coeff_on_nr;
+    out.coeff_on_nr  = coeff_on_nr;
     out.coeff_off_nr = coeff_off_nr;
 
     % AN-PC Merge r^2
-    out.r2_on_fr = r2_on_fr;
+    out.r2_on_fr  = r2_on_fr;
     out.r2_off_fr = r2_off_fr;
-    out.r2_on_nr = r2_on_nr;
+    out.r2_on_nr  = r2_on_nr;
     out.r2_off_nr = r2_off_nr;
 
     % Altitude, raw time, averaged time
@@ -333,24 +360,24 @@ function out = process(input_path,output_path)
     out.dsigma_m = dsigma_m;
 
     % PC uncertainty is for PC ozone ONLY, not analog/AN-PC merged ozone.
-    out.uNO3_fr = uNO3_fr;
-    out.uNO3_nr = uNO3_nr;
-    out.uNO3_pc_merged = uNO3_pc_merged;
-    out.uqO3_fr = uqO3_fr;
-    out.uqO3_nr = uqO3_nr;
-    out.uqO3_pc_merged = uqO3_pc_merged;
-    out.pc_uncertainty_fr = pc_uncertainty_fr;
-    out.pc_uncertainty_nr = pc_uncertainty_nr;
-    out.pc_uncertainty_merged = pc_uncertainty_merged;
-    out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT','O3','RAYLEIGH'}},...
-        'complete_atmospheric_budget',false,'tau_seconds',tau_d,'uTau_seconds',uTau,...
-        'uTau_relative',uTau_rel,'dead_time_uncertainty_source','provisional engineering estimate',...
-        'channel_correlation','independent','formula_mode','literal_paper',...
-        'averaging_method','raw_counts_accumulation','signal_normalization','total_counts',...
-        'cross_section_convention','single_path',...
-        'ozone_cross_section_correlation','independent','rayleigh_cross_section_correlation','full',...
-        'u_sigma_o3_relative',u_sigma_o3_rel,'u_sigma_m_relative',u_sigma_m_rel,...
-        'cross_section_uncertainty_source','Leblanc 2016 Table 3 working estimates');
+    % out.uNO3_fr = uNO3_fr;
+    % out.uNO3_nr = uNO3_nr;
+    % out.uNO3_pc_merged = uNO3_pc_merged;
+    % out.uqO3_fr = uqO3_fr;
+    % out.uqO3_nr = uqO3_nr;
+    % out.uqO3_pc_merged = uqO3_pc_merged;
+    % out.pc_uncertainty_fr = pc_uncertainty_fr;
+    % out.pc_uncertainty_nr = pc_uncertainty_nr;
+    % out.pc_uncertainty_merged = pc_uncertainty_merged;
+    % out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT','O3','RAYLEIGH'}},...
+    %     'complete_atmospheric_budget',false,'tau_seconds',tau_d,'uTau_seconds',uTau,...
+    %     'uTau_relative',uTau_rel,'dead_time_uncertainty_source','provisional engineering estimate',...
+    %     'channel_correlation','independent','formula_mode','literal_paper',...
+    %     'averaging_method','raw_counts_accumulation','signal_normalization','total_counts',...
+    %     'cross_section_convention','single_path',...
+    %     'ozone_cross_section_correlation','independent','rayleigh_cross_section_correlation','full',...
+    %     'u_sigma_o3_relative',u_sigma_o3_rel,'u_sigma_m_relative',u_sigma_m_rel,...
+    %     'cross_section_uncertainty_source','Leblanc 2016 Table 3 working estimates');
 
     save(output_path, '-struct', 'out')
 end

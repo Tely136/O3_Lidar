@@ -1,18 +1,37 @@
-function [merged,w] = merge_profiles(prof_low,prof_high,k,start_merge,end_merge)
-    merge_ind = find(k > start_merge & k < end_merge);
-    h_merge = k(merge_ind);
-    
-    w = (h_merge - h_merge(1)) ./ (h_merge(end) - h_merge(1));
+function [merged,w] = merge_profiles(prof_low,prof_high,start_merge,end_merge)
     
     n_prof = size(prof_low,2);
-    avgs2 = NaN(length(w),n_prof);
-    for i = 1:length(merge_ind)
-        temp = cat(1,prof_high(merge_ind(i),:),prof_low(merge_ind(i),:));
-        avgs2(i,:) = mean(temp,1,"omitmissing","Weights",[w(i) 1-w(i)]);
+    
+    merged = NaN(size(prof_low));
+    for i = 1:n_prof
+        low_temp = prof_low(:,i);
+        high_temp = prof_high(:,i);
+
+        if isscalar(start_merge) || isscalar(end_merge)
+            merge_ind = start_merge:end_merge;
+        else
+            merge_ind = start_merge(i):end_merge(i);
+        end
+        
+        w = (merge_ind(end) - merge_ind) ./ (merge_ind(end) - merge_ind(1));
+        avgs = mean([low_temp(merge_ind) high_temp(merge_ind)], 2, "Weights", [w' 1-w']);
+    
+        merged(:,i) = low_temp; % initialize with low profile
+
+        if isscalar(end_merge)
+            merged(end_merge:end,i) = high_temp(end_merge:end); % add high profile above merge range
+            merged(merge_ind,i) = avgs; % add weighted average to merged range
+        else
+            merged(end_merge(i):end,i) = high_temp(end_merge(i):end); % add high profile above merge range
+            merged(merge_ind,i) = avgs; % add weighted average to merged range
+        end
     end
 
-    % avgs = w.*prof_high(merge_ind,:) + (1-w).*prof_low(merge_ind,:);
-    merged = prof_low;
-    merged(merge_ind,:) = avgs2;
-    merged(k >= end_merge,:) = prof_high(k >= end_merge,:);
+    % figure;
+    % plot(low_temp, 'DisplayName','low')
+    % hold on
+    % plot(high_temp, 'DisplayName','high')
+    % plot(merged(:,i), 'DisplayName','merge')
+    % hold off
+    % legend
 end

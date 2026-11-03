@@ -1,9 +1,10 @@
 function [pc_merge,p,r2] = an_pc_merge(an,pc,window_length,min_toggle,max_toggle)
     n_prof = size(an,2);
 
-    p = NaN(n_prof,2);
-    r2 = NaN(n_prof,1);
+    p = NaN(n_prof,2);  % polynomial coefficients for each profile
+    r2 = NaN(n_prof,1); % r2 values for each profile
 
+    % loop over all profiles
     pc_merge = pc(:,:,1);
     for i=1:n_prof
         an_tmp = an(:,i);
@@ -15,6 +16,7 @@ function [pc_merge,p,r2] = an_pc_merge(an,pc,window_length,min_toggle,max_toggle
         n_valid = length(valid_idx);
         n_run = n_valid - window_length + 1;
     
+        % perform fit over each window
         p_run = NaN(n_run,2);
         r2_run = NaN(n_run,1);
         for j=1:n_run
@@ -27,6 +29,7 @@ function [pc_merge,p,r2] = an_pc_merge(an,pc,window_length,min_toggle,max_toggle
             r2_run(j) = s_temp.rsquared;
         end
     
+        % get index of best run and check if good enough
         [r2_best,id_best] = max(r2_run);
 
         if r2_best >= 0.8
