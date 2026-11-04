@@ -5,7 +5,7 @@ function range = linear_pc_range(an,pc,window_length)
 
     range = NaN(2,n_prof);
     ids = NaN(n_run,2);
-    r2 = NaN(n_run);
+    r2 = NaN(n_run,1);
     for i=1:n_prof
         an_tmp = an(:,i);
         pc_tmp = pc(:,i);
@@ -22,7 +22,7 @@ function range = linear_pc_range(an,pc,window_length)
             ids(j,:) = [windowIdx(1) windowIdx(end)]; 
         end
 
-        valid_id = find(r2 > 0.9);
+        valid_id = find(r2 > 0.95);
         lowest = valid_id(1);
         highest = valid_id(end);
 

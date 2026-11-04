@@ -1,11 +1,11 @@
-function [total,merged] = merge_pc_uncertainty(low,high,wLow)
+function [total,merged] = merge_pc_uncertainty(low,high,w)
     % Eqs. 95/97: merge components before combining the subtotal.
     % wLow must match the retrieval's effective LOW-range weights.
 
     signal_size = size(low.DET);
-    wLow = wLow + zeros(signal_size);
+    w = w + zeros(signal_size);
 
-    if ~isequal(size(wLow),signal_size) || any(wLow(:) < 0 | wLow(:) > 1)
+    if ~isequal(size(w),signal_size) || any(w(:) < 0 | w(:) > 1)
         error('O3:MergeWeights','Weights must match profiles and lie in [0,1].');
     end
 
@@ -21,19 +21,23 @@ function [total,merged] = merge_pc_uncertainty(low,high,wLow)
         end
 
         if strcmp(name,'DET')
-            uncertainty = uNO3_MRG_NC(high_component,low_component,wLow);
+            uncertainty = uNO3_MRG_NC(high_component,low_component,w);
+            
         elseif strcmp(name,'O3')
             % One shared fractional error; preserve the ozone-density sign.
-            uncertainty = wLow .* low_component + (1-wLow) .* high_component;
+            uncertainty = w .* low_component + (1-w) .* high_component;
+
         elseif strcmp(name,'RAYLEIGH')
             % The same atmospheric correction applies to both ranges.
             uncertainty = low_component;
+
         else
-            uncertainty = uNO3_MRG_FC(high_component,low_component,wLow);
+            uncertainty = uNO3_MRG_FC(high_component,low_component,w);
+
         end
 
-        uncertainty(wLow == 1) = low_component(wLow == 1);
-        uncertainty(wLow == 0) = high_component(wLow == 0);
+        uncertainty(w == 1) = low_component(w == 1);
+        uncertainty(w == 0) = high_component(w == 0);
         merged.(name) = uncertainty;
     end
 
