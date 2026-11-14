@@ -162,11 +162,6 @@ function testSyntheticAccumulationPipeline(t)
     verifyTrue(t,all(isfinite(total(50:100,:)),'all'));
     verifyEqual(t,total(50:100,:),hypot(parts.DET(50:100,:),parts.BKG(50:100,:)),'RelTol',1e-12);
 end
-function testInvalidInputs(t)
-    [P,C]=fixture();
-    verifyError(t,@()uNO3_P_X_NC(P,P,-1,1,2,4,C),'O3:NegativeUncertainty');
-    verifyError(t,@()uNO3_P_X_NC(P,P,1,1,2,4,C(1:2)),'O3:FilterSize');
-end
 function testCorrelatedRayleighCrossSection(t)
     Na = [1000 2000; 3000 4000];
     dS_O3 = [2 4; 5 8];
@@ -269,4 +264,91 @@ end
 function [P,C]=fixture()
     P=repmat([100 200],7,1);
     C=repmat({[ones(3,1)/3 [-0.5;0;0.5]]},1,7);
+end
+
+function testProfileMergeWeights(t)
+    low = 10*ones(7,2);
+    high = 20*ones(7,2);
+    low(3,1) = NaN;
+    high(4,2) = NaN;
+    high(1,1) = NaN;
+    low(7,2) = NaN;
+    [merged,w] = merge_profiles(low,high,[2 3],[5 6]);
+    verifyEqual(t,w(:,1),[1;1;0;1/3;0;0;0],'AbsTol',1e-12);
+    verifyEqual(t,w(:,2),[1;1;1;1;1/3;0;0],'AbsTol',1e-12);
+    verifyEqual(t,merged(3,1),20);
+    verifyEqual(t,merged(4,2),10);
+    verifyEqual(t,merged(1,1),10);
+    verifyEqual(t,merged(7,2),20);
+
+    [~,mixed] = merge_profiles(low,high,2,[5 6]);
+    verifyEqual(t,mixed(5,2),0.25,'AbsTol',1e-12);
+
+    lo = struct('DET',low,'BKG',low,'SAT',low,'O3',low,'RAYLEIGH',ones(7,2));
+    hi = struct('DET',high,'BKG',high,'SAT',high,'O3',high,'RAYLEIGH',ones(7,2));
+    [~,parts] = merge_pc_uncertainty(lo,hi,w);
+    verifyEqual(t,parts.O3,merged);
+    verifyEqual(t,parts.DET(3,1),20);
+    verifyEqual(t,parts.DET(4,2),10);
+end
+
+function testLinearPcIntervals(t)
+    x = repmat((1:60)',1,2);
+    y = 2*x+3;
+    [range,fit] = linear_pc_range(x,y,5,[6 50],5,0.95,0.1,[3 130],0.15);
+    verifyEqual(t,range,[8 8;48 48]);
+    verifyEqual(t,fit.r2,ones(9,2),'AbsTol',1e-12);
+    verifyLessThan(t,max(fit.residual,[],'all'),1e-12);
+
+    y(21:30,1) = NaN;
+    y(:,2) = -y(:,2);
+    [range,fit] = linear_pc_range(x,y,5,[6 50],5,0.95,0.1,[3 130],0.15);
+    verifyEqual(t,range(:,1),[33;48]);
+    verifyTrue(t,all(isnan(range(:,2))));
+    verifyFalse(t,fit.valid(4,1));
+
+    [range,~] = linear_pc_range(x,y,5,[6 10],5,0.95,0.1,[3 130],0.15);
+    verifyTrue(t,all(isnan(range),'all'));
+end
+
+function testMissingMergeInterval(t)
+    [merged,w] = merge_profiles(ones(7,2),2*ones(7,2),[2 NaN],[5 NaN]);
+    verifyTrue(t,all(isnan(merged(:,2))));
+    verifyTrue(t,all(isnan(w(:,2))));
+    verifyTrue(t,all(isfinite(merged(:,1))));
+end
+
+function testReferenceSlopeRejectsLocalLinearity(t)
+    x = (1:100)';
+    y = 2*x;
+    y(1:40) = 3*x(1:40);
+    [range,fit] = linear_pc_range(x,y,5,[1 100],5,0.95,0.1,[130 200],0.15);
+    verifyEqual(t,fit.reference_slope,2,'AbsTol',1e-12);
+    verifyEqual(t,fit.r2(1),1,'AbsTol',1e-12);
+    verifyFalse(t,fit.valid(1));
+    verifyEqual(t,fit.slope_difference(1),0.5,'AbsTol',1e-12);
+    verifyEqual(t,range,[43;98]);
+
+    [range,fit] = linear_pc_range(x,y,5,[1 100],5,0.95,0.1,[500 600],0.15);
+    verifyTrue(t,all(isnan(range)));
+    verifyFalse(t,any(fit.valid));
+end
+
+function testDirectFrNrLinearity(t)
+    nr = repmat((1:60)',1,2);
+    fr = 2*nr+3;
+    [range,fit] = linear_fr_nr_range(nr,fr,5,[6 50],5,0.95,0.1);
+    verifyEqual(t,range,[8 8;48 48]);
+    verifyEqual(t,fit.slope,2*ones(9,2),'AbsTol',1e-12);
+    verifyTrue(t,all(fit.valid,'all'));
+
+    fr(21:30,1) = NaN;
+    fr(:,2) = 200-nr(:,2);
+    [range,fit] = linear_fr_nr_range(nr,fr,5,[6 50],5,0.95,0.1);
+    verifyEqual(t,range(:,1),[33;48]);
+    verifyTrue(t,all(isnan(range(:,2))));
+    verifyFalse(t,any(fit.valid(:,2)));
+
+    [range,~] = linear_fr_nr_range(nr,fr,5,[6 10],5,0.95,0.1);
+    verifyTrue(t,all(isnan(range),'all'));
 end

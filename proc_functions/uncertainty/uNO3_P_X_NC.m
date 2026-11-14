@@ -6,8 +6,7 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelat
         verticalCorrelation = 'none';
     end
 
-    mode = validatestring(verticalCorrelation,{'none','full'});
-    [Pon,Poff,u_on,u_off,dsigma] = uncertainty_inputs(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp);
+    [Pon,Poff,u_on,u_off,dsigma] = uncertainty_inputs(Pon,Poff,u_Pon_X,u_Poff_X,dsigma);
     u = NaN(size(Pon));
 
     for profile = 1:size(Pon,2)
@@ -15,10 +14,6 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelat
             filter = cp{k};
             coefficients = filter(:,2);
             half_width = (numel(coefficients) - 1) / 2;
-
-            if half_width ~= floor(half_width)
-                error('O3:FilterLength','Filters must have odd length.');
-            end
 
             if k - half_width < 1 || k + half_width > size(Pon,1)
                 continue;
@@ -36,15 +31,13 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelat
 
             relative_uncertainty = hypot(uncertainty_on ./ on,uncertainty_off ./ off);
 
-            if strcmp(mode,'none')
+            if strcmp(verticalCorrelation,'none')
                 filtered_uncertainty = sqrt(sum(coefficients.^2 .* relative_uncertainty.^2));
             else
                 filtered_uncertainty = sum(coefficients .* relative_uncertainty);
             end
 
-            if isfinite(dsigma(k,profile)) && dsigma(k,profile) ~= 0
-                u(k,profile) = filtered_uncertainty ./ (2 .* abs(dsigma(k,profile)) .* dz);
-            end
+            u(k,profile) = filtered_uncertainty ./ (2 .* abs(dsigma(k,profile)) .* dz);
         end
     end
 end

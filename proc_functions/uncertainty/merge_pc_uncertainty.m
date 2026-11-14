@@ -1,44 +1,25 @@
 function [total,merged] = merge_pc_uncertainty(low,high,w)
-    % Eqs. 95/97: merge components before combining the subtotal.
-    % wLow must match the retrieval's effective LOW-range weights.
+    % w is the low-range weight returned by merge_profiles.
 
-    signal_size = size(low.DET);
-    w = w + zeros(signal_size);
+    w = w + zeros(size(low.DET));
 
-    if ~isequal(size(w),signal_size) || any(w(:) < 0 | w(:) > 1)
-        error('O3:MergeWeights','Weights must match profiles and lie in [0,1].');
-    end
+    merged.DET = uNO3_MRG_NC(high.DET,low.DET,w);
+    merged.BKG = uNO3_MRG_FC(high.BKG,low.BKG,w);
+    merged.SAT = uNO3_MRG_FC(high.SAT,low.SAT,w);
 
-    fields = {'DET','BKG','SAT','O3','RAYLEIGH'};
+    % Cross-section errors are shared between ranges.
+    merged.O3 = w .* low.O3 + (1-w) .* high.O3;
+    merged.RAYLEIGH = low.RAYLEIGH;
 
-    for j = 1:numel(fields)
-        name = fields{j};
-        low_component = low.(name);
-        high_component = high.(name);
-
-        if ~isequal(size(low_component),signal_size) || ~isequal(size(high_component),signal_size)
-            error('O3:MergeSize','Component profiles must have identical sizes.');
-        end
-
-        if strcmp(name,'DET')
-            uncertainty = uNO3_MRG_NC(high_component,low_component,w);
-            
-        elseif strcmp(name,'O3')
-            % One shared fractional error; preserve the ozone-density sign.
-            uncertainty = w .* low_component + (1-w) .* high_component;
-
-        elseif strcmp(name,'RAYLEIGH')
-            % The same atmospheric correction applies to both ranges.
-            uncertainty = low_component;
-
-        else
-            uncertainty = uNO3_MRG_FC(high_component,low_component,w);
-
-        end
-
-        uncertainty(w == 1) = low_component(w == 1);
-        uncertainty(w == 0) = high_component(w == 0);
-        merged.(name) = uncertainty;
+    fields = fieldnames(merged);
+    for i = 1:length(fields)
+        name = fields{i};
+        lo = low.(name) + zeros(size(w));
+        hi = high.(name) + zeros(size(w));
+        u = merged.(name) + zeros(size(w));
+        u(w == 1) = lo(w == 1);
+        u(w == 0) = hi(w == 0);
+        merged.(name) = u;
     end
 
     total = sqrt(merged.DET.^2 + merged.BKG.^2 + merged.SAT.^2 + merged.O3.^2 + merged.RAYLEIGH.^2);

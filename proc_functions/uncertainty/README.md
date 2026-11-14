@@ -18,8 +18,8 @@ This does not implement the entire uncertainty budget in the paper.
 - Data are altitude x profile; derivative filter matrices use column 2.
 - `bg_correction` stores SEs as **[slope; intercept]**. `uP_BKG` takes
   **(intercept SE, slope SE, correlation, z)**.
-- Paper merge weight `w` means LOW-range weight. `merge_profiles` returns
-  HIGH-range weight; pass `1-w_high` to the uncertainty merge formulas.
+- Paper merge weight `w` means LOW-range weight. `merge_profiles` returns the same LOW-range weight, including adjustments
+  when one range is missing. Pass it directly to the uncertainty merge.
 - Do not use photon-count uncertainty for analog or analog/PC merged ozone.
 
 ## Function-by-function findings

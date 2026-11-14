@@ -2,11 +2,7 @@ function [total,components] = photon_count_uncertainty(R,P,N,Na,uB,rb,id_on,id_o
     % R and P are raw/corrected accumulated counts for each output profile.
     % N is this range's ozone density; Na is air density; L is total shots.
 
-    if isscalar(options.uTau)
-        uTau = [options.uTau options.uTau];
-    else
-        uTau = options.uTau;
-    end
+    uTau = options.uTau + zeros(1,2);
 
     if isscalar(options.L)
         L_on = options.L;
