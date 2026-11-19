@@ -1,8 +1,6 @@
-% Uncertainty in photon counts due to detection noise
-%  Equations 30 and 31 in paper
 function u = uP_DET(P,R)
-% R is raw total signal counts across all shots in lidar signal
-% P is dead-time and background corrected total signal count
+    % Eqs. 30-31: corrected P and raw R have the same accumulated shots.
 
-    u = (P./R).^2 .* sqrt(R);
+    u = (P ./ R).^2 .* uDET(R);
+    u(~isfinite(P) | ~isfinite(R) | R <= 0) = NaN;
 end

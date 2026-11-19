@@ -1,7 +1,6 @@
-% Uncertainty in photon counts due to saturation correction
-% Equations 34 and 35 in paper
 function u = uP_SAT(P,dz,L,uTau)
-    c = physconst("LightSpeed");
-    
-    u = (c / (2*dz*L)) * P.^2 * uTau;
+    % Eqs. 34-35: P in accumulated counts; L is TOTAL shots; uTau in seconds.
+
+    u = physconst("LightSpeed") ./ (2 .* dz .* L) .* P.^2 .* uTau;
+    u(~isfinite(P)) = NaN;
 end

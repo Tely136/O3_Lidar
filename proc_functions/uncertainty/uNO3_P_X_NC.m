@@ -1,38 +1,43 @@
-% Uncertainty in Ozone number density due to X propagated through photon counts, with no covariance terms
-% From Thierry's Part 2 paper
-%   Equations 32,33,36,37,43,44 in paper
-function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp)
-    arguments
-        Pon         % signal counts in on channel
-        Poff        % signal counts in off channel
-        u_Pon_X     % uncertainty in photon counts due to source X in on channel
-        u_Poff_X    % uncertainty in photon counts due to source X in off channel
-        dsigma      % differential absorption cross section
-        dz          % bin width
-        cp          % height dependent filter coefficients
+function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelation)
+    % Eq. 32 ('none') or Eqs. 36/43 ('full'); independent ON/OFF channels.
+    % dsigma is single-path; literal correlated sums may be negative.
+
+    if nargin < 8
+        verticalCorrelation = 'none';
     end
 
-    coeff = 1 ./ (abs(dsigma) * dz);
-
-    % Altitude dimension should be 1st
-    nk = size(Pon,1);
-    n_prof = size(Pon,2);
-
+    [Pon,Poff,u_on,u_off,dsigma] = uncertainty_inputs(Pon,Poff,u_Pon_X,u_Poff_X,dsigma);
     u = NaN(size(Pon));
 
-    for prof = 1:n_prof
-        for i = 1:nk
-            c_temp = cp{i};
-            M = size(c_temp,1);
-            N = (M-1)/2;
+    for profile = 1:size(Pon,2)
+        for k = 1:size(Pon,1)
+            filter = cp{k};
+            coefficients = filter(:,2);
+            half_width = (numel(coefficients) - 1) / 2;
 
-            if i-N >= 1 && i+N <= nk
-                idx = i-N:i+N;
-                A = ((u_Pon_X(idx)./Pon(idx).^2 + (u_Poff_X(idx)./Poff(idx).^2)));
-                u(i,prof) = sqrt(c_temp(:,2).^2' * A);
+            if k - half_width < 1 || k + half_width > size(Pon,1)
+                continue;
             end
+
+            bins = k - half_width:k + half_width;
+            on = Pon(bins,profile);
+            off = Poff(bins,profile);
+            uncertainty_on = u_on(bins,profile);
+            uncertainty_off = u_off(bins,profile);
+
+            if any(~isfinite(on) | ~isfinite(off) | on <= 0 | off <= 0 | ~isfinite(uncertainty_on) | ~isfinite(uncertainty_off))
+                continue;
+            end
+
+            relative_uncertainty = hypot(uncertainty_on ./ on,uncertainty_off ./ off);
+
+            if strcmp(verticalCorrelation,'none')
+                filtered_uncertainty = sqrt(sum(coefficients.^2 .* relative_uncertainty.^2));
+            else
+                filtered_uncertainty = sum(coefficients .* relative_uncertainty);
+            end
+
+            u(k,profile) = filtered_uncertainty ./ (2 .* abs(dsigma(k,profile)) .* dz);
         end
     end
-
-    u = coeff .* u;
 end

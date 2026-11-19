@@ -1,18 +1,30 @@
-function [merged,w] = merge_profiles(prof_low,prof_high,k,start_merge,end_merge)
-    merge_ind = find(k > start_merge & k < end_merge);
-    h_merge = k(merge_ind);
-    
-    w = (h_merge - h_merge(1)) ./ (h_merge(end) - h_merge(1));
-    
-    n_prof = size(prof_low,2);
-    avgs2 = NaN(length(w),n_prof);
-    for i = 1:length(merge_ind)
-        temp = cat(1,prof_high(merge_ind(i),:),prof_low(merge_ind(i),:));
-        avgs2(i,:) = mean(temp,1,"omitmissing","Weights",[w(i) 1-w(i)]);
+function [merged,w] = merge_profiles(prof_low,prof_high,start_merge,end_merge)
+    [n_bin,n_prof] = size(prof_low);
+    w = NaN(n_bin,n_prof);
+
+    if isscalar(start_merge)
+        start_merge = repmat(start_merge,1,n_prof);
+    end
+    if isscalar(end_merge)
+        end_merge = repmat(end_merge,1,n_prof);
     end
 
-    % avgs = w.*prof_high(merge_ind,:) + (1-w).*prof_low(merge_ind,:);
-    merged = prof_low;
-    merged(merge_ind,:) = avgs2;
-    merged(k >= end_merge,:) = prof_high(k >= end_merge,:);
+    for i = 1:n_prof
+        if isnan(start_merge(i)) || isnan(end_merge(i))
+            continue
+        end
+
+        merge_ind = start_merge(i):end_merge(i);
+        w(1:start_merge(i)-1,i) = 1;
+        w(end_merge(i)+1:end,i) = 0;
+        w(merge_ind,i) = linspace(1,0,length(merge_ind));
+    end
+
+    % Return the weights actually used when one range is missing.
+    w(isnan(prof_low) & ~isnan(prof_high) & w < 1) = 0;
+    w(~isnan(prof_low) & isnan(prof_high) & w > 0) = 1;
+
+    merged = w .* prof_low + (1-w) .* prof_high;
+    merged(w == 1) = prof_low(w == 1);
+    merged(w == 0) = prof_high(w == 0);
 end

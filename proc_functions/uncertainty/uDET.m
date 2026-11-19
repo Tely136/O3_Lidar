@@ -1,8 +1,6 @@
-% Uncertainty owing to detection noise
-% Need to confirm how this is impacted by signal averaging
-    % Equations 28 and 29 in paper
 function u = uDET(R)
-% R should be total counts
-% laser shots * photon/sec * sec/bin
+    % Eqs. 28-29: R is accumulated photon counts.
+
     u = sqrt(R);
+    u(~isfinite(R) | R < 0) = NaN;
 end

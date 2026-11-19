@@ -13,6 +13,7 @@ function ND_plot(x,y,z,c_lim,y_lim,x_label,y_label,c_label,title_str,fs)
     end
 
     figure;
+    set(gcf,"Position",[100 100 1000 650]);
     I = imagesc(x, y, z);
     cbar_tolnet=colorbar_tolnet_func;
     colormap(cbar_tolnet);
