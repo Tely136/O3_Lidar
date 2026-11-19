@@ -1,4 +1,8 @@
-function out = process(input_path,output_path)
+function out = process(input_path,output_path,aerosol)
+    if nargin < 3
+        aerosol = [];
+    end
+
     % Resolve dependencies from this file, independent of MATLAB's cwd.
     repo_dir = fileparts(fileparts(mfilename('fullpath')));
     model_dir = fullfile(fileparts(repo_dir),'signal_analysis');
@@ -200,6 +204,20 @@ function out = process(input_path,output_path)
     N_o3_fr_mg = dial(mg_on_fr,mg_off_fr,C_fr,dz,dsigma_o3) - N_o3_dm;
     N_o3_nr_mg = dial(mg_on_nr,mg_off_nr,C_nr,dz,dsigma_o3) - N_o3_dm;
 
+    if ~isempty(aerosol)
+        [D_fr,D_nr,beta_a] = aerosol_correction(pc_off_fr,N_o3_fr_pc,z(:),C_fr,C_nr,...
+            Na.*sigma_m_off,sigma_o3_off_t,dsigma_o3,lam_on,lam_off,aerosol);
+
+        fr = isfinite(D_fr);
+        nr = isfinite(D_nr);
+        N_o3_fr_an(fr) = N_o3_fr_an(fr) + D_fr(fr);
+        N_o3_fr_pc(fr) = N_o3_fr_pc(fr) + D_fr(fr);
+        N_o3_fr_mg(fr) = N_o3_fr_mg(fr) + D_fr(fr);
+        N_o3_nr_an(nr) = N_o3_nr_an(nr) + D_nr(nr);
+        N_o3_nr_pc(nr) = N_o3_nr_pc(nr) + D_nr(nr);
+        N_o3_nr_mg(nr) = N_o3_nr_mg(nr) + D_nr(nr);
+    end
+
     % Merge near range and far range for analog calculated profile, photon counting calculated profile, and analog-pc calculated profile
     [N_o3_an_merged,w_o3_an] = merge_profiles(N_o3_nr_an,N_o3_fr_an,start_merge_id,end_merge_id);
     [N_o3_pc_merged,w_o3_pc] = merge_profiles(N_o3_nr_pc,N_o3_fr_pc,start_pc_merge,end_pc_merge);
@@ -342,6 +360,11 @@ function out = process(input_path,output_path)
 
     % Rayleigh extinction correction
     out.N_o3_dm = N_o3_dm;
+
+    if ~isempty(aerosol)
+        out.aerosol = struct('settings',aerosol,'beta_off',beta_a,...
+            'delta_N_o3_fr',D_fr,'delta_N_o3_nr',D_nr);
+    end
 
     % AN-PC Merge coefficients
     out.coeff_on_fr  = coeff_on_fr;

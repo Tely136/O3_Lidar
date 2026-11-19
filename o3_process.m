@@ -17,6 +17,7 @@ result_path     = fullfile(root_dir, "O3_processed_data");
 log_path        = fullfile(root_dir, "O3_processed_data");
 
 log_file        = fullfile(log_path, "o3_process.log");
+aerosol         = [];
 
 if ~exist(result_path, "dir")
     mkdir(result_path)
@@ -50,7 +51,7 @@ for i = 1:size(folders, 1) %[output:group:5d039cb0]
         output_filename = sprintf("o3_processed_%04d%02d%02d.mat", year(folderDate), month(folderDate), day(folderDate));
 
         try
-            out = process(fullfile(data_path, tmp_folder), fullfile(result_path, output_filename));
+            out = process(fullfile(data_path, tmp_folder), fullfile(result_path, output_filename), aerosol);
         catch ME
             warning("Processing failed for %s: %s", tmp_folder, ME.message);
 
