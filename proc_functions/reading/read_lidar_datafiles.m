@@ -48,7 +48,7 @@ function [an_data,pc_data,times,configs] = read_lidar_datafiles(folder_path,file
     pc_data = NaN(2^exp,num_files,n_channels);
 
     % initialize array for times
-    times = NaT(num_files,3);
+    times = NaT(num_files,3,'TimeZone','UTC');
     
     % initialize struct array for config
     configs(num_files) = preview_data.config;
@@ -57,7 +57,7 @@ function [an_data,pc_data,times,configs] = read_lidar_datafiles(folder_path,file
     for i = 1:num_files
         Data = read(fds);
     
-        times(i,:)       = Data.time;
+        times(i,:)       = datetime(Data.time,'TimeZone','UTC');
         configs(i)       = Data.config;
         for j = 1:n_channels
             temp = Data.data(:,:,j,:);

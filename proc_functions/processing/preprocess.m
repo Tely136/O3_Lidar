@@ -14,7 +14,7 @@ function [an_bin_out,pc_P_out,times_avg,ids_avg,an_B,pc_B,pc_uB,pc_rb,pc_R_sum,n
     an_bin_out = NaN(n_bins,n_prof_avg,n_channels);
     pc_R_sum = NaN(n_bins,n_prof_avg,n_channels);
     n_shots_total = NaN(1,n_prof_avg,n_channels);
-    times_avg = NaT(n_prof_avg,1);
+    times_avg = NaT(n_prof_avg,1,'TimeZone','UTC');
     ids_avg = NaN(n_prof,1);
 
     % Accumulate complete groups of files; the remainder is left unused.
