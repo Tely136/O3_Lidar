@@ -1,4 +1,4 @@
-function download_lidar_data(date, download_path)
+function download_ccny_lidar_data(date, download_path)
     current_dir = pwd;
     cd(download_path);
     

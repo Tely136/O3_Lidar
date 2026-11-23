@@ -1,11 +1,11 @@
 function [total,merged] = merge_pc_uncertainty(low,high,w)
     % w is the low-range weight returned by merge_profiles.
 
-    w = w + zeros(size(low.DET));
+    w = w + zeros(size(low.uNO3_DET));
 
-    merged.DET = uNO3_MRG_NC(high.DET,low.DET,w);
-    merged.BKG = uNO3_MRG_FC(high.BKG,low.BKG,w);
-    merged.SAT = uNO3_MRG_FC(high.SAT,low.SAT,w);
+    merged.uNO3_DET = uNO3_MRG_NC(high.uNO3_DET,low.uNO3_DET,w);
+    merged.uNO3_BKG = uNO3_MRG_FC(high.uNO3_BKG,low.uNO3_BKG,w);
+    merged.uNO3_SAT = uNO3_MRG_FC(high.uNO3_SAT,low.uNO3_SAT,w);
 
     % Cross-section errors are shared between ranges.
     merged.O3 = w .* low.O3 + (1-w) .* high.O3;
@@ -22,5 +22,5 @@ function [total,merged] = merge_pc_uncertainty(low,high,w)
         merged.(name) = u;
     end
 
-    total = sqrt(merged.DET.^2 + merged.BKG.^2 + merged.SAT.^2 + merged.O3.^2 + merged.RAYLEIGH.^2);
+    total = sqrt(merged.uNO3_DET.^2 + merged.uNO3_BKG.^2 + merged.uNO3_SAT.^2 + merged.O3.^2 + merged.RAYLEIGH.^2);
 end

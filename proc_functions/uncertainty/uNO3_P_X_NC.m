@@ -2,10 +2,8 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelat
     % Eq. 32 ('none') or Eqs. 36/43 ('full'); independent ON/OFF channels.
     % dsigma is single-path; literal correlated sums may be negative.
 
-    if nargin < 8
-        verticalCorrelation = 'none';
-    end
 
+    % TODO: what is this
     [Pon,Poff,u_on,u_off,dsigma] = uncertainty_inputs(Pon,Poff,u_Pon_X,u_Poff_X,dsigma);
     u = NaN(size(Pon));
 
@@ -31,10 +29,15 @@ function u = uNO3_P_X_NC(Pon,Poff,u_Pon_X,u_Poff_X,dsigma,dz,cp,verticalCorrelat
 
             relative_uncertainty = hypot(uncertainty_on ./ on,uncertainty_off ./ off);
 
-            if strcmp(verticalCorrelation,'none')
+            if strcmp(verticalCorrelation,'independent')
                 filtered_uncertainty = sqrt(sum(coefficients.^2 .* relative_uncertainty.^2));
-            else
+
+            elseif strcmp(verticalCorrelation, 'full')
                 filtered_uncertainty = sum(coefficients .* relative_uncertainty);
+
+            else
+                error("invalid channel correlation")
+                
             end
 
             u(k,profile) = filtered_uncertainty ./ (2 .* abs(dsigma(k,profile)) .* dz);

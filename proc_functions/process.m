@@ -1,23 +1,29 @@
 function out = process(input_path,output_path)
-    % Resolve dependencies from this file, independent of MATLAB's cwd.
     repo_dir = fileparts(fileparts(mfilename('fullpath')));
     model_dir = fullfile(fileparts(repo_dir),'signal_analysis');
     addpath(genpath(fullfile(repo_dir,'proc_functions')));
     addpath(genpath(fullfile(model_dir,'functions')));
 
     %% Signal preparation
-    % parameters to be moved into config file
+    % TODO: move parameters into config file
     data_format = "bin";
     prefix = "ol";
     n_avg = 30;
-    fd = 270; % inverse dead time (MHz)
-    tau_d = 1 / (fd * 1e6); % seconds
-    uTau_rel = 0.10; % provisional standard uncertainty until calibrated
-    uTau = uTau_rel * tau_d;
+    fd = 270;                           % inverse dead time (MHz)
+    tau_d = 1 / (fd * 1e6);             % dead-time in seconds
+
     start_merge = 1.5;
     end_merge = 2;
+
     min_toggle = .1;
     max_toggle = 60;
+
+    % Relative standard uncertainties
+    u_sigma_o3_rel = 0.02;
+    u_sigma_m_rel = 0.02;
+    uTau_rel = 0.10;                    % provisional standard uncertainty until calibrated
+
+    uTau = uTau_rel * tau_d;
 
     % Channel IDs
     on_fr_id = 1;
@@ -25,28 +31,12 @@ function out = process(input_path,output_path)
     on_nr_id = 3;
     off_nr_id = 4;
 
-    % Relative standard uncertainties; working estimates from Table 3.
-    u_sigma_o3_rel = 0.02;
-    u_sigma_m_rel = 0.02;
-
     % Bin width
     dz = 3.75;
 
     % Window sizes for an-pc merge
     window_length_fr = 500;
     window_length_nr = 100;
-
-    % Analog-PC agreement search for the FR-NR PC merge.
-    pc_search_km = [1 5];
-    pc_window_length = 201;
-    pc_window_step = 20;
-    pc_min_r2 = 0.95;
-    pc_max_residual = 0.10;
-    pc_max_slope_difference = 0.15;
-
-    % Direct FR-NR PC linearity check.
-    fr_nr_min_r2 = 0.95;
-    fr_nr_max_residual = 0.10;
 
     % Read raw binary analog and photon counting data
     [an_R,pc_R,times,configs] = read_lidar_datafiles(input_path,data_format,prefix);
@@ -62,6 +52,7 @@ function out = process(input_path,output_path)
     z = (1:n_bins) .* dz;
     z_km = z.*1e-3;
 
+    % change below comment
     % Sum raw files, correct dead time, then fit the accumulated background.
     [an_bin_sum, pc_P_sum, times_avg, ids_avg, an_B_sum, pc_B_sum, pc_uB, pc_rb, pc_R_sum, n_shots_total] = preprocess(an_R,pc_R,times,dz,n_avg,n_shots,fd);
     an_bin_bg = an_bin_sum - an_B_sum;
@@ -111,34 +102,11 @@ function out = process(input_path,output_path)
     [mg_on_nr,coeff_on_nr,r2_on_nr]    = an_pc_merge(an_on_nr, pc_on_nr, window_length_nr, min_toggle, max_toggle);
     [mg_off_nr,coeff_off_nr,r2_off_nr] = an_pc_merge(an_off_nr, pc_off_nr, window_length_nr, min_toggle, max_toggle);
 
-    % Find continuous analog-PC agreement intervals.
-    [~,pc_search_start] = min(abs(z_km-pc_search_km(1)));
-    [~,pc_search_end] = min(abs(z_km-pc_search_km(2)));
-    pc_search_range = [pc_search_start pc_search_end];
-
-    [range_on_fr,pc_fit_on_fr] = linear_pc_range(an_on_fr,pc_on_fr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
-    [range_off_fr,pc_fit_off_fr] = linear_pc_range(an_off_fr,pc_off_fr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
-    [range_on_nr,pc_fit_on_nr] = linear_pc_range(an_on_nr,pc_on_nr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
-    [range_off_nr,pc_fit_off_nr] = linear_pc_range(an_off_nr,pc_off_nr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
-
-    start_pc_merge_anpc = max([range_on_fr(1,:);range_off_fr(1,:);range_on_nr(1,:);range_off_nr(1,:)],[],1,'includemissing');
-    end_pc_merge_anpc = min([range_on_fr(2,:);range_off_fr(2,:);range_on_nr(2,:);range_off_nr(2,:)],[],1,'includemissing');
-    no_overlap = start_pc_merge_anpc >= end_pc_merge_anpc;
-    start_pc_merge_anpc(no_overlap) = NaN;
-    end_pc_merge_anpc(no_overlap) = NaN;
-
-    % Find ON and OFF linear ranges independently, then intersect them.
-    [range_fr_nr_on,fit_fr_nr_on] = linear_fr_nr_range(pc_on_nr,pc_on_fr,pc_window_length,pc_search_range,pc_window_step,fr_nr_min_r2,fr_nr_max_residual);
-    [range_fr_nr_off,fit_fr_nr_off] = linear_fr_nr_range(pc_off_nr,pc_off_fr,pc_window_length,pc_search_range,pc_window_step,fr_nr_min_r2,fr_nr_max_residual);
-
-    start_pc_merge_linear = max([range_fr_nr_on(1,:);range_fr_nr_off(1,:)],[],1,'includemissing');
-    end_pc_merge_linear = min([range_fr_nr_on(2,:);range_fr_nr_off(2,:)],[],1,'includemissing');
-    no_overlap = start_pc_merge_linear >= end_pc_merge_linear;
-    start_pc_merge_linear(no_overlap) = NaN;
-    end_pc_merge_linear(no_overlap) = NaN;
-
-    start_pc_merge = start_pc_merge_linear;
-    end_pc_merge = end_pc_merge_linear;
+    % TODO: Automatically find best FR-NR merge for PC processed ozone
+    % [range_on_fr,pc_fit_on_fr] = linear_pc_range(an_on_fr,pc_on_fr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
+    % [range_off_fr,pc_fit_off_fr] = linear_pc_range(an_off_fr,pc_off_fr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
+    % [range_on_nr,pc_fit_on_nr] = linear_pc_range(an_on_nr,pc_on_nr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
+    % [range_off_nr,pc_fit_off_nr] = linear_pc_range(an_off_nr,pc_off_nr,pc_window_length,pc_search_range,pc_window_step,pc_min_r2,pc_max_residual,[min_toggle max_toggle],pc_max_slope_difference);
 
     [~,start_merge_id] = min(abs(z_km-start_merge));
     [~,end_merge_id] = min(abs(z_km-end_merge));
@@ -174,8 +142,8 @@ function out = process(input_path,output_path)
     sigma_o3_on_t = NaN(n_bins,n_prof_avg);
     sigma_o3_off_t = NaN(n_bins,n_prof_avg);
     for i=1:n_prof_avg
-        sigma_o3_on_t(:,i) = interp1(BDM_t, sigma_o3_on, Ta(:,i));
-        sigma_o3_off_t(:,i) = interp1(BDM_t, sigma_o3_off, Ta(:,i));
+        sigma_o3_on_t(:,i) = fillmissing(interp1(BDM_t, sigma_o3_on, Ta(:,i)), "nearest");
+        sigma_o3_off_t(:,i) = fillmissing(interp1(BDM_t, sigma_o3_off, Ta(:,i)), "nearest");
     end
 
     dsigma_o3 = sigma_o3_on_t - sigma_o3_off_t;
@@ -202,7 +170,7 @@ function out = process(input_path,output_path)
 
     % Merge near range and far range for analog calculated profile, photon counting calculated profile, and analog-pc calculated profile
     [N_o3_an_merged,w_o3_an] = merge_profiles(N_o3_nr_an,N_o3_fr_an,start_merge_id,end_merge_id);
-    [N_o3_pc_merged,w_o3_pc] = merge_profiles(N_o3_nr_pc,N_o3_fr_pc,start_pc_merge,end_pc_merge);
+    [N_o3_pc_merged,w_o3_pc] = merge_profiles(N_o3_nr_pc,N_o3_fr_pc,start_merge_id,end_merge_id);
     [N_o3_mg_merged,w_o3_mg] = merge_profiles(N_o3_nr_mg,N_o3_fr_mg,start_merge_id,end_merge_id);
 
     % Convert ozone number density to mixing ratio (ppb)
@@ -220,26 +188,30 @@ function out = process(input_path,output_path)
     q_o3_mg_merged = (N_o3_mg_merged ./ Na) * 1e9;
 
     % Photon-count uncertainty budget
-    uncertainty_options.dz = dz;
-    uncertainty_options.L = n_shots_total;
-    uncertainty_options.uTau = uTau;
-    uncertainty_options.dsigma = dsigma_o3;
-    uncertainty_options.channelCorrelation = 'independent';
-    uncertainty_options.sigma_o3_on = sigma_o3_on_t;
-    uncertainty_options.sigma_o3_off = sigma_o3_off_t;
-    uncertainty_options.sigma_m_on = sigma_m_on;
-    uncertainty_options.sigma_m_off = sigma_m_off;
-    uncertainty_options.u_sigma_o3_rel = u_sigma_o3_rel;
-    uncertainty_options.u_sigma_m_rel = u_sigma_m_rel;
+    uncertainty_options.dz = dz;                                % bin spacing
+    uncertainty_options.L = n_shots_total;                      % number of total laser shots per profile
+    uncertainty_options.uTau = uTau;                            % dead-time uncertainty
+    uncertainty_options.dsigma = dsigma_o3;                     % differential ozone cross-section
+    uncertainty_options.channel_correlation = 'independent';    % correlation between on-off channels ('independent' or 'full')
+    uncertainty_options.sigma_o3_on = sigma_o3_on_t;            % ozone cross absorption section at lam_on
+    uncertainty_options.sigma_o3_off = sigma_o3_off_t;          % ozone absorption cross section at lam_off
+    uncertainty_options.sigma_m_on = sigma_m_on;                % molecular extinction cross section at lam_on
+    uncertainty_options.sigma_m_off = sigma_m_off;              % molecular extinction cross section at lam_off
+    uncertainty_options.u_sigma_o3_rel = u_sigma_o3_rel;        % percent uncertainty in ozone absorption cross section
+    uncertainty_options.u_sigma_m_rel = u_sigma_m_rel;          % percent uncertainty in molecular extinction cross section
 
+    % Calculate uncertainty in ozone number density for FR
     uncertainty_options.C = C_fr;
-    [uNO3_fr,pc_uncertainty_fr] = photon_count_uncertainty(pc_R_sum,pc_P_bg,N_o3_fr_pc,Na,pc_uB,pc_rb,on_fr_id,off_fr_id,uncertainty_options);
+    [uNO3_fr,pc_uncertainty_fr] = uNO3(pc_R_sum,pc_P_bg,N_o3_fr_pc,Na,pc_uB,pc_rb,on_fr_id,off_fr_id,uncertainty_options);
 
+    % Calculate uncertainty in ozone number density for NR 
     uncertainty_options.C = C_nr;
-    [uNO3_nr,pc_uncertainty_nr] = photon_count_uncertainty(pc_R_sum,pc_P_bg,N_o3_nr_pc,Na,pc_uB,pc_rb,on_nr_id,off_nr_id,uncertainty_options);
+    [uNO3_nr,pc_uncertainty_nr] = uNO3(pc_R_sum,pc_P_bg,N_o3_nr_pc,Na,pc_uB,pc_rb,on_nr_id,off_nr_id,uncertainty_options);
 
+    % Merge FR and NR uncertainty through weighted average
     [uNO3_pc_merged,pc_uncertainty_merged] = merge_pc_uncertainty(pc_uncertainty_nr,pc_uncertainty_fr,w_o3_pc);
 
+    % Convert uncertainty in ozone number density to ozone mixing ratio
     uqO3_fr        = uNO3_fr ./ Na .* 1e9;
     uqO3_nr        = uNO3_nr ./ Na .* 1e9;
     uqO3_pc_merged = uNO3_pc_merged ./ Na .* 1e9;
@@ -320,26 +292,6 @@ function out = process(input_path,output_path)
     out.w_o3_pc = w_o3_pc;
     out.w_o3_mg = w_o3_mg;
 
-    % PC merge intervals and analog-PC fit diagnostics.
-    out.start_pc_merge = start_pc_merge;
-    out.end_pc_merge = end_pc_merge;
-    out.start_pc_merge_anpc = start_pc_merge_anpc;
-    out.end_pc_merge_anpc = end_pc_merge_anpc;
-    out.start_pc_merge_linear = start_pc_merge_linear;
-    out.end_pc_merge_linear = end_pc_merge_linear;
-    out.range_fr_nr_on = range_fr_nr_on;
-    out.range_fr_nr_off = range_fr_nr_off;
-    out.fit_fr_nr_on = fit_fr_nr_on;
-    out.fit_fr_nr_off = fit_fr_nr_off;
-    out.range_on_fr = range_on_fr;
-    out.range_off_fr = range_off_fr;
-    out.range_on_nr = range_on_nr;
-    out.range_off_nr = range_off_nr;
-    out.pc_fit_on_fr = pc_fit_on_fr;
-    out.pc_fit_off_fr = pc_fit_off_fr;
-    out.pc_fit_on_nr = pc_fit_on_nr;
-    out.pc_fit_off_nr = pc_fit_off_nr;
-
     % Rayleigh extinction correction
     out.N_o3_dm = N_o3_dm;
 
@@ -384,25 +336,18 @@ function out = process(input_path,output_path)
     out.sigma_m_off = sigma_m_off;
     out.dsigma_m = dsigma_m;
 
-    % PC uncertainty
-    out.uNO3_fr = uNO3_fr;
-    out.uNO3_nr = uNO3_nr;
-    out.uNO3_pc_merged = uNO3_pc_merged;
-    out.uqO3_fr = uqO3_fr;
-    out.uqO3_nr = uqO3_nr;
-    out.uqO3_pc_merged = uqO3_pc_merged;
-    out.pc_uncertainty_fr = pc_uncertainty_fr;
-    out.pc_uncertainty_nr = pc_uncertainty_nr;
-    out.pc_uncertainty_merged = pc_uncertainty_merged;
-    out.pc_uncertainty_metadata = struct('components',{{'DET','BKG','SAT','O3','RAYLEIGH'}},...
-        'complete_atmospheric_budget',false,'tau_seconds',tau_d,'uTau_seconds',uTau,...
-        'uTau_relative',uTau_rel,'dead_time_uncertainty_source','provisional engineering estimate',...
-        'channel_correlation','independent','formula_mode','literal_paper',...
-        'averaging_method','raw_counts_accumulation','signal_normalization','total_counts',...
-        'cross_section_convention','single_path',...
-        'ozone_cross_section_correlation','independent','rayleigh_cross_section_correlation','full',...
-        'u_sigma_o3_relative',u_sigma_o3_rel,'u_sigma_m_relative',u_sigma_m_rel,...
-        'cross_section_uncertainty_source','Leblanc 2016 Table 3 working estimates');
+    % Uncertainty from photon-counting signals
+    out.uNO3_fr = uNO3_fr;                                  % FR uncertainty in ozone number density
+    out.uNO3_nr = uNO3_nr;                                  % NR uncertainty in ozone number density
+    out.uNO3_pc_merged = uNO3_pc_merged;                    % FR-NR merged uncertainty in ozone number density
+
+    out.uqO3_fr = uqO3_fr;                                  % FR uncertainty in ozone mixing ratio
+    out.uqO3_nr = uqO3_nr;                                  % NR uncertainty in ozone mixing ratio
+    out.uqO3_pc_merged = uqO3_pc_merged;                    % FR-NR merged uncertainty in ozone mixing ratio
+
+    out.pc_uncertainty_fr = pc_uncertainty_fr;              % ?
+    out.pc_uncertainty_nr = pc_uncertainty_nr;              % ?
+    out.pc_uncertainty_merged = pc_uncertainty_merged;      % ?
 
     save(output_path, '-struct', 'out')
 end
