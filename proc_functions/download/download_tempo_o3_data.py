@@ -1,5 +1,5 @@
 import earthaccess
-import os
+# import os
 
 earthaccess.login(strategy="netrc")
 

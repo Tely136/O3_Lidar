@@ -8,7 +8,7 @@ function o3_col = convert_du(NO3,prof_alt,alt,alt_bins)
         upper_alt = alt_bins(i,1);
 
         idx = prof_alt >= lower_alt & prof_alt < upper_alt;
-        o3_col(i) = sum(NO3(idx) * (upper_alt-lower_alt));
+        o3_col(i) = trapz(prof_alt(idx) .* 1e3,NO3(idx));
     end
 
     o3_col = o3_col ./ (2.68678e20);
